@@ -5,17 +5,21 @@ pub enum Token {
     Comma,
     Semicolon,
 
+    SelectKeyword,
     CreateKeyword,
     InsertKeyword,
 
     TableKeyword,
     DatabaseKeyword,
 
+    FromKeyword,
     ValuesKeyword,
     IntoKeyword,
     NotKeyword,
     NullKeyword,
     IntegerKeyword,
+
+    Asterisk,
 
     Identifier(String),
     NumericLiteral(String),
@@ -42,6 +46,9 @@ pub fn tokenize(input: &str) -> Vec<Token> {
         } else if character == ';' {
             tokens.push(Token::Semicolon);
             continue;
+        } else if character == '*' {
+            tokens.push(Token::Asterisk);
+            continue;
         }
 
         let mut token = String::from(character);
@@ -61,10 +68,12 @@ pub fn tokenize(input: &str) -> Vec<Token> {
         match &token[..] {
             "CREATE" => tokens.push(Token::CreateKeyword),
             "INSERT" => tokens.push(Token::InsertKeyword),
+            "SELECT" => tokens.push(Token::SelectKeyword),
 
             "TABLE" => tokens.push(Token::TableKeyword),
             "DATABASE" => tokens.push(Token::DatabaseKeyword),
 
+            "FROM" => tokens.push(Token::FromKeyword),
             "VALUES" => tokens.push(Token::ValuesKeyword),
             "INTO" => tokens.push(Token::IntoKeyword),
             "NOT" => tokens.push(Token::NotKeyword),
@@ -88,6 +97,11 @@ pub fn tokenize(input: &str) -> Vec<Token> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_tokenizing_special_characters() {
+        assert_eq!(vec![Token::Asterisk,], tokenize("*"),)
+    }
 
     #[test]
     fn test_tokenizing_create_database_input() {
@@ -155,6 +169,20 @@ mod tests {
                 Token::Semicolon
             ],
             tokenize("INSERT INTO users VALUES (12, 31);"),
+        )
+    }
+
+    #[test]
+    fn test_tokenizing_select_all_input() {
+        assert_eq!(
+            vec![
+                Token::SelectKeyword,
+                Token::Asterisk,
+                Token::FromKeyword,
+                Token::Identifier("users".to_string()),
+                Token::Semicolon
+            ],
+            tokenize("SELECT * FROM users;"),
         )
     }
 }
