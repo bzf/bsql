@@ -8,6 +8,7 @@ pub enum Token {
     SelectKeyword,
     CreateKeyword,
     InsertKeyword,
+    UseKeyword,
 
     TableKeyword,
     DatabaseKeyword,
@@ -69,6 +70,7 @@ pub fn tokenize(input: &str) -> Vec<Token> {
             "CREATE" => tokens.push(Token::CreateKeyword),
             "INSERT" => tokens.push(Token::InsertKeyword),
             "SELECT" => tokens.push(Token::SelectKeyword),
+            "USE" => tokens.push(Token::UseKeyword),
 
             "TABLE" => tokens.push(Token::TableKeyword),
             "DATABASE" => tokens.push(Token::DatabaseKeyword),

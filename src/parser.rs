@@ -13,6 +13,10 @@ pub enum Command {
         columns: Vec<(String, DataType)>,
     },
 
+    UseDatabase {
+        database_name: String,
+    },
+
     InsertInto {
         table_name: String,
         values: Vec<LiteralValue>,
@@ -31,6 +35,7 @@ pub fn parse(input: &str) -> Option<Command> {
     match command_tokens.first() {
         Some(Token::CreateKeyword) => parse_create_command(command_tokens),
         Some(Token::InsertKeyword) => parse_insert_command(command_tokens),
+        Some(Token::UseKeyword) => parse_use_command(command_tokens),
 
         _ => None,
     }
@@ -110,6 +115,18 @@ fn parse_insert_command(mut tokens: Vec<Token>) -> Option<Command> {
     });
 }
 
+fn parse_use_command(mut tokens: Vec<Token>) -> Option<Command> {
+    tokens.reverse();
+    tokens.pop()?; // Skip the first known `Token::UseKeyword`
+
+    let Some(Token::Identifier(database_name)) = tokens.pop() else {
+        // Expected an `Token::Identifier`
+        return None;
+    };
+
+    return Some(Command::UseDatabase { database_name });
+}
+
 fn parse_create_table_command(identifier: String, tokens: Vec<Token>) -> Option<Command> {
     Some(Command::CreateTable {
         table_name: identifier,
@@ -172,6 +189,16 @@ mod tests {
                 database_name: "my_database".to_string()
             }),
             parse("CREATE DATABASE my_database;"),
+        );
+    }
+
+    #[test]
+    fn test_parsing_use_database_expression() {
+        assert_eq!(
+            Some(Command::UseDatabase {
+                database_name: "my_database2".to_string()
+            }),
+            parse("USE my_database2;"),
         );
     }
 
