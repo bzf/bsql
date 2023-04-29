@@ -8,10 +8,13 @@ pub struct DatabaseManager {
 
 impl DatabaseManager {
     pub fn new() -> Self {
-        println!("DatabaseManager::new()");
         Self {
             databases: HashMap::new(),
         }
+    }
+
+    pub fn database_names(&self) -> Vec<String> {
+        self.databases.keys().cloned().collect()
     }
 
     pub fn create_database(&mut self, name: &str) -> Option<()> {

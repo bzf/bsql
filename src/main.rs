@@ -28,6 +28,9 @@ fn main() {
                 continue;
             }
 
+            ["\\l"] => list_databases(database_manager.database_names()),
+            ["\\list"] => list_databases(database_manager.database_names()),
+
             ["exit"] => {
                 break;
             }
@@ -62,6 +65,14 @@ fn main() {
             }
         }
     }
+}
+
+fn list_databases(database_names: Vec<String>) {
+    database_names
+        .iter()
+        .for_each(|database_name| println!("{}", database_name));
+
+    println!("({} rows)", database_names.len());
 }
 
 fn prompt(name: &str) -> String {
