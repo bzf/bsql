@@ -25,7 +25,6 @@ fn main() {
 
             _ => {
                 let command = parser::parse(&expression);
-                println!("parsed command: '{:#?}'", command);
 
                 match command {
                     Some(Command::UseDatabase { database_name }) => {
@@ -45,7 +44,11 @@ fn main() {
                             continue;
                         };
 
-                        database_manager.create_table(&database_name, &table_name);
+                        todo!(
+                            "create table '{}' in database '{}'",
+                            table_name,
+                            database_name
+                        )
                     }
 
                     Some(Command::InsertInto {
