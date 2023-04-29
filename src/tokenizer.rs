@@ -5,7 +5,18 @@ pub enum Token {
     Comma,
     Semicolon,
 
-    Keyword(String),
+    CreateKeyword,
+    InsertKeyword,
+
+    TableKeyword,
+    DatabaseKeyword,
+
+    ValuesKeyword,
+    IntoKeyword,
+    NotKeyword,
+    NullKeyword,
+    IntegerKeyword,
+
     Identifier(String),
     NumericLiteral(String),
 }
@@ -48,18 +59,18 @@ pub fn tokenize(input: &str) -> Vec<Token> {
         }
 
         match &token[..] {
-            "CREATE" => tokens.push(Token::Keyword(token)),
-            "INSERT" => tokens.push(Token::Keyword(token)),
+            "CREATE" => tokens.push(Token::CreateKeyword),
+            "INSERT" => tokens.push(Token::InsertKeyword),
 
-            "TABLE" => tokens.push(Token::Keyword(token)),
-            "DATABASE" => tokens.push(Token::Keyword(token)),
+            "TABLE" => tokens.push(Token::TableKeyword),
+            "DATABASE" => tokens.push(Token::DatabaseKeyword),
 
-            "VALUES" => tokens.push(Token::Keyword(token)),
-            "INTO" => tokens.push(Token::Keyword(token)),
-            "NOT" => tokens.push(Token::Keyword(token)),
-            "NULL" => tokens.push(Token::Keyword(token)),
+            "VALUES" => tokens.push(Token::ValuesKeyword),
+            "INTO" => tokens.push(Token::IntoKeyword),
+            "NOT" => tokens.push(Token::NotKeyword),
+            "NULL" => tokens.push(Token::NullKeyword),
 
-            "integer" => tokens.push(Token::Keyword(token)),
+            "integer" => tokens.push(Token::IntegerKeyword),
 
             _ => {
                 if token.chars().all(|i| i.is_numeric()) {
@@ -82,8 +93,8 @@ mod tests {
     fn test_tokenizing_create_database_input() {
         assert_eq!(
             vec![
-                Token::Keyword("CREATE".to_string()),
-                Token::Keyword("DATABASE".to_string()),
+                Token::CreateKeyword,
+                Token::DatabaseKeyword,
                 Token::Identifier("my_database".to_string()),
                 Token::Semicolon
             ],
@@ -95,8 +106,8 @@ mod tests {
     fn test_tokenizing_create_table_without_any_columns_input() {
         assert_eq!(
             vec![
-                Token::Keyword("CREATE".to_string()),
-                Token::Keyword("TABLE".to_string()),
+                Token::CreateKeyword,
+                Token::TableKeyword,
                 Token::Identifier("my_table".to_string()),
                 Token::OpeningParenthesis,
                 Token::ClosingParenthesis,
@@ -110,17 +121,17 @@ mod tests {
     fn test_tokenizing_create_table_with_columns_input() {
         assert_eq!(
             vec![
-                Token::Keyword("CREATE".to_string()),
-                Token::Keyword("TABLE".to_string()),
+                Token::CreateKeyword,
+                Token::TableKeyword,
                 Token::Identifier("users".to_string()),
                 Token::OpeningParenthesis,
                 Token::Identifier("birth_year".to_string()),
-                Token::Keyword("integer".to_string()),
+                Token::IntegerKeyword,
                 Token::Comma,
                 Token::Identifier("age".to_string()),
-                Token::Keyword("integer".to_string()),
-                Token::Keyword("NOT".to_string()),
-                Token::Keyword("NULL".to_string()),
+                Token::IntegerKeyword,
+                Token::NotKeyword,
+                Token::NullKeyword,
                 Token::ClosingParenthesis,
                 Token::Semicolon
             ],
@@ -132,10 +143,10 @@ mod tests {
     fn test_tokenizing_insert_input() {
         assert_eq!(
             vec![
-                Token::Keyword("INSERT".to_string()),
-                Token::Keyword("INTO".to_string()),
+                Token::InsertKeyword,
+                Token::IntoKeyword,
                 Token::Identifier("users".to_string()),
-                Token::Keyword("VALUES".to_string()),
+                Token::ValuesKeyword,
                 Token::OpeningParenthesis,
                 Token::NumericLiteral("12".to_string()),
                 Token::Comma,
