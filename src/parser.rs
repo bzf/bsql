@@ -4,10 +4,19 @@ use crate::tokenizer::Token;
 
 #[derive(Debug, PartialEq)]
 pub enum Command {
-    CreateDatabase(String),
-    CreateTable(String, Vec<(String, DataType)>),
+    CreateDatabase {
+        database_name: String,
+    },
 
-    InsertInto(String, Vec<LiteralValue>),
+    CreateTable {
+        table_name: String,
+        columns: Vec<(String, DataType)>,
+    },
+
+    InsertInto {
+        table_name: String,
+        values: Vec<LiteralValue>,
+    },
 }
 
 // TODO: Only reads one command at a time and ignores any tokens after that.
@@ -38,7 +47,9 @@ fn parse_create_command(mut tokens: Vec<Token>) -> Option<Command> {
     };
 
     match create_type_keyword {
-        Token::DatabaseKeyword => Some(Command::CreateDatabase(identifier)),
+        Token::DatabaseKeyword => Some(Command::CreateDatabase {
+            database_name: identifier,
+        }),
         Token::TableKeyword => {
             tokens.reverse(); // Reverse them back to the input order
             return parse_create_table_command(identifier, tokens);
@@ -93,14 +104,17 @@ fn parse_insert_command(mut tokens: Vec<Token>) -> Option<Command> {
         }
     }
 
-    return Some(Command::InsertInto(identifier, literal_values));
+    return Some(Command::InsertInto {
+        table_name: identifier,
+        values: literal_values,
+    });
 }
 
 fn parse_create_table_command(identifier: String, tokens: Vec<Token>) -> Option<Command> {
-    Some(Command::CreateTable(
-        identifier,
-        parse_table_column_info_list(tokens)?,
-    ))
+    Some(Command::CreateTable {
+        table_name: identifier,
+        columns: parse_table_column_info_list(tokens)?,
+    })
 }
 
 fn parse_table_column_info_list(tokens: Vec<Token>) -> Option<Vec<(String, DataType)>> {
@@ -154,7 +168,9 @@ mod tests {
     #[test]
     fn test_parsing_create_database_expression() {
         assert_eq!(
-            Some(Command::CreateDatabase("my_database".to_string())),
+            Some(Command::CreateDatabase {
+                database_name: "my_database".to_string()
+            }),
             parse("CREATE DATABASE my_database;"),
         );
     }
@@ -162,13 +178,13 @@ mod tests {
     #[test]
     fn test_parsing_create_table_expression() {
         assert_eq!(
-            Some(Command::CreateTable(
-                "users".to_string(),
-                vec![
+            Some(Command::CreateTable {
+                table_name: "users".to_string(),
+                columns: vec![
                     ("age".to_string(), DataType::Integer),
                     ("birthyear".to_string(), DataType::Integer),
                 ]
-            )),
+            }),
             parse("CREATE TABLE users (age integer, birthyear integer);"),
         );
     }
@@ -176,10 +192,10 @@ mod tests {
     #[test]
     fn test_parsing_insert_into_expression() {
         assert_eq!(
-            Some(Command::InsertInto(
-                "users2".to_string(),
-                vec![LiteralValue::Integer(12)]
-            )),
+            Some(Command::InsertInto {
+                table_name: "users2".to_string(),
+                values: vec![LiteralValue::Integer(12)]
+            }),
             parse("INSERT INTO users2 VALUES (12);"),
         );
     }
@@ -187,10 +203,10 @@ mod tests {
     #[test]
     fn test_parsing_insert_into_expression_with_multiple_values() {
         assert_eq!(
-            Some(Command::InsertInto(
-                "users2".to_string(),
-                vec![LiteralValue::Integer(12), LiteralValue::Integer(14)]
-            )),
+            Some(Command::InsertInto {
+                table_name: "users2".to_string(),
+                values: vec![LiteralValue::Integer(12), LiteralValue::Integer(14)]
+            }),
             parse("INSERT INTO users2 VALUES (12, 14);"),
         );
     }
