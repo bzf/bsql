@@ -19,6 +19,12 @@ impl DatabaseManager {
         self.databases.keys().cloned().collect()
     }
 
+    pub fn database_table_names(&self, database_name: &str) -> Option<Vec<String>> {
+        self.databases
+            .get(database_name)
+            .map(|database| database.table_names())
+    }
+
     pub fn database_exists(&self, key: &str) -> bool {
         self.databases.contains_key(key)
     }

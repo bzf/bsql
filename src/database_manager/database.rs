@@ -13,6 +13,10 @@ impl Database {
         }
     }
 
+    pub fn table_names(&self) -> Vec<String> {
+        self.table_definitions.keys().cloned().collect()
+    }
+
     pub fn create_table(&mut self, table_schema: &TableSchema) -> Option<()> {
         if !self.table_exists(table_schema.name()) {
             self.table_definitions

@@ -34,6 +34,19 @@ fn main() {
             ["\\l"] => list_databases(database_manager.database_names()),
             ["\\list"] => list_databases(database_manager.database_names()),
 
+            ["\\dt"] => {
+                let Some(database_name) = &active_database else {
+                    println!("No active database selected.");
+                    continue;
+                };
+
+                if let Some(table_names) = database_manager.database_table_names(&database_name) {
+                    list_tables(table_names)
+                } else {
+                    println!("FATAL: Active database no longer exists.");
+                }
+            }
+
             ["exit"] => {
                 break;
             }
@@ -76,6 +89,14 @@ fn list_databases(database_names: Vec<String>) {
         .for_each(|database_name| println!("{}", database_name));
 
     println!("({} rows)", database_names.len());
+}
+
+fn list_tables(table_names: Vec<String>) {
+    table_names
+        .iter()
+        .for_each(|table_name| println!("{}", table_name));
+
+    println!("({} rows)", table_names.len());
 }
 
 fn prompt(name: &str) -> String {
