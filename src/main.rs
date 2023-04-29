@@ -19,18 +19,23 @@ fn main() {
             prompt("> ")
         };
 
-        match &expression[..] {
-            "" => continue,
-            "exit" => break,
+        let command_parts: Vec<&str> = expression.split(" ").collect();
+
+        match &command_parts[..] {
+            ["\\c", database_name] => {
+                active_database = Some(database_name.to_string());
+                println!("You are now connected to database \"{}\".", database_name);
+                continue;
+            }
+
+            ["exit"] => {
+                break;
+            }
 
             _ => {
                 let command = parser::parse(&expression);
 
                 match command {
-                    Some(Command::UseDatabase { database_name }) => {
-                        active_database = Some(database_name);
-                    }
-
                     Some(Command::CreateDatabase { database_name }) => {
                         database_manager.create_database(&database_name);
                     }
