@@ -1,10 +1,13 @@
 use crate::data_type::DataType;
+use crate::literal_value::LiteralValue;
 use crate::tokenizer::Token;
 
 #[derive(Debug, PartialEq)]
 pub enum Command {
     CreateDatabase(String),
     CreateTable(String, Vec<(String, DataType)>),
+
+    InsertInto(String, Vec<LiteralValue>),
 }
 
 // TODO: Only reads one command at a time and ignores any tokens after that.
@@ -18,6 +21,7 @@ pub fn parse(input: &str) -> Option<Command> {
 
     match command_tokens.first() {
         Some(Token::CreateKeyword) => parse_create_command(command_tokens),
+        Some(Token::InsertKeyword) => parse_insert_command(command_tokens),
 
         _ => None,
     }
@@ -42,6 +46,54 @@ fn parse_create_command(mut tokens: Vec<Token>) -> Option<Command> {
 
         _ => None,
     }
+}
+
+fn parse_insert_command(mut tokens: Vec<Token>) -> Option<Command> {
+    tokens.reverse();
+    tokens.pop()?; // Skip the first known `Token::InsertKeyword`
+
+    let Some(Token::IntoKeyword) = tokens.pop() else {
+        // Expeceted `Token::IntoKeyword`
+        return None;
+    };
+
+    let Token::Identifier(identifier) = tokens.pop()? else {
+        // Expeceted an table identifier
+        return None;
+    };
+
+    let Token::ValuesKeyword = tokens.pop()? else {
+        // Expeceted `Token::ValuesKeyword`
+        return None;
+    };
+
+    let Token::OpeningParenthesis = tokens.pop()? else {
+        // Expeceted `Token::OpeningParenthesis`
+        return None;
+    };
+
+    tokens.reverse(); // Return the list back to the input order
+    let mut tokens = tokens.into_iter().peekable();
+    println!("parse_insert_command: {:?}", tokens);
+
+    let mut literal_values: Vec<LiteralValue> = vec![];
+
+    loop {
+        if Some(&Token::ClosingParenthesis) == tokens.peek() {
+            break;
+        } else if let Some(literal_value) = tokens.next()?.into() {
+            literal_values.push(literal_value);
+
+            if let Some(Token::Comma) = tokens.peek() {
+                tokens.next(); // Step over the trailing comma
+            }
+        } else {
+            println!("Got unexpected token: {:?}", tokens.peek());
+            return None; // Expeceted another column info or a `ClosingParenthesis`
+        }
+    }
+
+    return Some(Command::InsertInto(identifier, literal_values));
 }
 
 fn parse_create_table_command(identifier: String, tokens: Vec<Token>) -> Option<Command> {
@@ -95,6 +147,8 @@ fn parse_table_column_info(
 
 #[cfg(test)]
 mod tests {
+    use crate::literal_value::LiteralValue;
+
     use super::*;
 
     #[test]
@@ -116,6 +170,28 @@ mod tests {
                 ]
             )),
             parse("CREATE TABLE users (age integer, birthyear integer);"),
+        );
+    }
+
+    #[test]
+    fn test_parsing_insert_into_expression() {
+        assert_eq!(
+            Some(Command::InsertInto(
+                "users2".to_string(),
+                vec![LiteralValue::Integer(12)]
+            )),
+            parse("INSERT INTO users2 VALUES (12);"),
+        );
+    }
+
+    #[test]
+    fn test_parsing_insert_into_expression_with_multiple_values() {
+        assert_eq!(
+            Some(Command::InsertInto(
+                "users2".to_string(),
+                vec![LiteralValue::Integer(12), LiteralValue::Integer(14)]
+            )),
+            parse("INSERT INTO users2 VALUES (12, 14);"),
         );
     }
 }

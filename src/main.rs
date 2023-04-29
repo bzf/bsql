@@ -1,6 +1,7 @@
 use std::io::Write;
 
 mod data_type;
+mod literal_value;
 mod parser;
 mod tokenizer;
 
