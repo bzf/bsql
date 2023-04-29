@@ -1,5 +1,7 @@
 use std::io::Write;
 
+mod tokenizer;
+
 fn main() {
     loop {
         let expression = prompt("> ");
