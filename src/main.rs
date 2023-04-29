@@ -1,5 +1,7 @@
 use std::io::Write;
 
+mod data_type;
+mod parser;
 mod tokenizer;
 
 fn main() {
@@ -10,7 +12,10 @@ fn main() {
             "" => continue,
             "exit" => break,
 
-            _ => println!("Read statement: '{}'", expression),
+            _ => {
+                let parse_result = parser::parse(&expression);
+                println!("parse_result: '{:#?}'", parse_result);
+            }
         }
     }
 }
