@@ -1,6 +1,6 @@
 use super::ColumnDefinition;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TableSchema {
     table_name: String,
     column_definitions: Vec<ColumnDefinition>,

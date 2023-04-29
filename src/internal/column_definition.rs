@@ -1,6 +1,6 @@
 use super::DataType;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ColumnDefinition {
     column_name: String,
     data_type: DataType,

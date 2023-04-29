@@ -52,11 +52,11 @@ fn main() {
                             continue;
                         };
 
-                        todo!(
-                            "create table '{}' in database '{}'",
-                            schema.name(),
-                            database_name
-                        )
+                        if database_manager.create_table(database_name, schema) {
+                            println!("CREATE TABLE");
+                        } else {
+                            println!("ERROR: Table \"{}\" already exists.", database_name);
+                        }
                     }
 
                     Some(Command::InsertInto {
