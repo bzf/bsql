@@ -1,21 +1,59 @@
 use std::io::Write;
 
+use crate::parser::Command;
+
 mod data_type;
+mod database_manager;
 mod literal_value;
 mod parser;
 mod tokenizer;
 
 fn main() {
+    let mut database_manager = database_manager::DatabaseManager::new();
+    let mut active_database: Option<String> = None;
+
     loop {
-        let expression = prompt("> ");
+        let expression = if let Some(database_name) = &active_database {
+            prompt(&format!("{}> ", database_name))
+        } else {
+            prompt("> ")
+        };
 
         match &expression[..] {
             "" => continue,
             "exit" => break,
 
             _ => {
-                let parse_result = parser::parse(&expression);
-                println!("parse_result: '{:#?}'", parse_result);
+                let command = parser::parse(&expression);
+                println!("parsed command: '{:#?}'", command);
+
+                match command {
+                    Some(Command::UseDatabase { database_name }) => {
+                        active_database = Some(database_name);
+                    }
+
+                    Some(Command::CreateDatabase { database_name }) => {
+                        database_manager.create_database(&database_name);
+                    }
+
+                    Some(Command::CreateTable {
+                        table_name,
+                        columns: _,
+                    }) => {
+                        let Some(ref database_name) = active_database else {
+                            println!("No active database selected.");
+                            continue;
+                        };
+
+                        database_manager.create_table(&database_name, &table_name);
+                    }
+
+                    Some(Command::InsertInto {
+                        table_name: _,
+                        values: _,
+                    }) => (),
+                    None => (),
+                }
             }
         }
     }
