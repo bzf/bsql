@@ -17,6 +17,10 @@ impl DatabaseManager {
         self.databases.keys().cloned().collect()
     }
 
+    pub fn database_exists(&self, key: &str) -> bool {
+        self.databases.contains_key(key)
+    }
+
     pub fn create_database(&mut self, name: &str) -> Option<()> {
         if !self.databases.contains_key(name) {
             self.databases

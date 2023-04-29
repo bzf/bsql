@@ -23,9 +23,12 @@ fn main() {
 
         match &command_parts[..] {
             ["\\c", database_name] => {
-                active_database = Some(database_name.to_string());
-                println!("You are now connected to database \"{}\".", database_name);
-                continue;
+                if database_manager.database_exists(database_name) {
+                    active_database = Some(database_name.to_string());
+                    println!("You are now connected to database \"{}\".", database_name);
+                } else {
+                    println!("FATAL: database \"{}\" does not exist", database_name);
+                }
             }
 
             ["\\l"] => list_databases(database_manager.database_names()),
