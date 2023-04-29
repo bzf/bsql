@@ -1,3 +1,5 @@
+use crate::internal::DataType;
+
 #[derive(Debug, PartialEq)]
 pub enum Token {
     OpeningParenthesis,
@@ -24,6 +26,15 @@ pub enum Token {
 
     Identifier(String),
     NumericLiteral(String),
+}
+
+impl From<Token> for Option<DataType> {
+    fn from(value: Token) -> Self {
+        match value {
+            Token::IntegerKeyword => Some(DataType::Integer),
+            _ => None,
+        }
+    }
 }
 
 pub fn tokenize(input: &str) -> Vec<Token> {

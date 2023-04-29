@@ -1,4 +1,4 @@
-use crate::data_type::DataType;
+use crate::internal::{ColumnDefinition, DataType, TableSchema};
 use crate::literal_value::LiteralValue;
 use crate::tokenizer::Token;
 
@@ -8,13 +8,12 @@ pub enum Command {
         database_name: String,
     },
 
-    CreateTable {
-        table_name: String,
-        columns: Vec<(String, DataType)>,
-    },
-
     UseDatabase {
         database_name: String,
+    },
+
+    CreateTable {
+        schema: TableSchema,
     },
 
     InsertInto {
@@ -129,12 +128,11 @@ fn parse_use_command(mut tokens: Vec<Token>) -> Option<Command> {
 
 fn parse_create_table_command(identifier: String, tokens: Vec<Token>) -> Option<Command> {
     Some(Command::CreateTable {
-        table_name: identifier,
-        columns: parse_table_column_info_list(tokens)?,
+        schema: TableSchema::new(identifier, parse_column_definitions(tokens)?),
     })
 }
 
-fn parse_table_column_info_list(tokens: Vec<Token>) -> Option<Vec<(String, DataType)>> {
+fn parse_column_definitions(tokens: Vec<Token>) -> Option<Vec<ColumnDefinition>> {
     let mut column_info_list = vec![];
     let mut tokens = tokens.into_iter().peekable();
 
@@ -148,7 +146,7 @@ fn parse_table_column_info_list(tokens: Vec<Token>) -> Option<Vec<(String, DataT
         } else if let (Some(identifier_token), Some(data_type_token)) =
             (tokens.next(), tokens.next())
         {
-            column_info_list.push(parse_table_column_info(identifier_token, data_type_token)?);
+            column_info_list.push(parse_column_definition(identifier_token, data_type_token)?);
 
             if let Some(Token::Comma) = tokens.peek() {
                 tokens.next(); // Step over the trailing comma
@@ -162,14 +160,14 @@ fn parse_table_column_info_list(tokens: Vec<Token>) -> Option<Vec<(String, DataT
     return Some(column_info_list);
 }
 
-fn parse_table_column_info(
+fn parse_column_definition(
     identifier_token: Token,
     data_type_token: Token,
-) -> Option<(String, DataType)> {
+) -> Option<ColumnDefinition> {
     match identifier_token {
         Token::Identifier(identifier) => {
             let data_type: Option<DataType> = data_type_token.into();
-            Some((identifier, data_type?))
+            Some(ColumnDefinition::new(identifier, data_type?))
         }
 
         _ => None,
@@ -206,11 +204,13 @@ mod tests {
     fn test_parsing_create_table_expression() {
         assert_eq!(
             Some(Command::CreateTable {
-                table_name: "users".to_string(),
-                columns: vec![
-                    ("age".to_string(), DataType::Integer),
-                    ("birthyear".to_string(), DataType::Integer),
-                ]
+                schema: TableSchema::new(
+                    "users".to_string(),
+                    vec![
+                        ColumnDefinition::new("age".to_string(), DataType::Integer),
+                        ColumnDefinition::new("birthyear".to_string(), DataType::Integer)
+                    ]
+                )
             }),
             parse("CREATE TABLE users (age integer, birthyear integer);"),
         );

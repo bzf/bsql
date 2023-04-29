@@ -2,8 +2,8 @@ use std::io::Write;
 
 use crate::parser::Command;
 
-mod data_type;
 mod database_manager;
+mod internal;
 mod literal_value;
 mod parser;
 mod tokenizer;
@@ -35,10 +35,7 @@ fn main() {
                         database_manager.create_database(&database_name);
                     }
 
-                    Some(Command::CreateTable {
-                        table_name,
-                        columns: _,
-                    }) => {
+                    Some(Command::CreateTable { schema }) => {
                         let Some(ref database_name) = active_database else {
                             println!("No active database selected.");
                             continue;
@@ -46,7 +43,7 @@ fn main() {
 
                         todo!(
                             "create table '{}' in database '{}'",
-                            table_name,
+                            schema.name(),
                             database_name
                         )
                     }
