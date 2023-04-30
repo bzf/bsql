@@ -18,6 +18,10 @@ impl TableSchema {
         }
     }
 
+    pub fn column_definitions_len(&self) -> usize {
+        self.column_definitions.len()
+    }
+
     pub fn add_column(&mut self, column_name: &str, data_type: DataType) -> bool {
         if !self.column_definitions.contains_key(column_name) {
             self.column_definitions.insert(
