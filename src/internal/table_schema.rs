@@ -18,6 +18,13 @@ impl TableSchema {
         }
     }
 
+    pub fn column_definitions(&self) -> Vec<(String, ColumnDefinition)> {
+        self.column_definitions
+            .iter()
+            .map(|(table_name, definition)| (table_name.clone(), definition.clone()))
+            .collect()
+    }
+
     pub fn column_definitions_len(&self) -> usize {
         self.column_definitions.len()
     }

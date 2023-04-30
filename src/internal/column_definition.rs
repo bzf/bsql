@@ -13,4 +13,8 @@ impl ColumnDefinition {
             data_type,
         }
     }
+
+    pub fn data_type(&self) -> &DataType {
+        &self.data_type
+    }
 }

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use super::TableSchema;
+use super::{DataType, TableSchema};
 
 type TableId = u64;
 
@@ -25,6 +25,14 @@ impl Database {
         self.table_names.keys().cloned().collect()
     }
 
+    pub fn table_schema(&self, table_name: &str) -> Option<&TableSchema> {
+        let Some(table_id) = self.table_names.get(table_name) else {
+            return None;
+        };
+
+        self.table_definitions.get(table_id)
+    }
+
     pub fn create_table(&mut self, table_name: &str) -> Option<TableId> {
         if !self.table_exists(table_name) {
             let table_id = self.next_table_id;
@@ -37,6 +45,18 @@ impl Database {
         } else {
             None
         }
+    }
+
+    pub fn add_column(&mut self, table_name: &str, column_name: &str, data_type: DataType) -> bool {
+        let Some(table_id) = self.table_names.get(table_name) else {
+            return false;
+        };
+
+        let Some(table_schema) = self.table_definitions.get_mut(table_id) else {
+            return false;
+        };
+
+        table_schema.add_column(column_name, data_type)
     }
 
     fn table_exists(&self, table_name: &str) -> bool {
@@ -75,5 +95,16 @@ mod tests {
         let result = database.create_table(table_name);
 
         assert!(result.is_none(), "Should fail to create duplicate database");
+    }
+
+    #[test]
+    fn test_adding_column_to_table() {
+        let mut database = Database::new();
+        let table_name = "new_database";
+        assert!(database.create_table(table_name).is_some());
+
+        let result = database.add_column(table_name, "age", DataType::Integer);
+
+        assert!(result, "Failed to add column to table");
     }
 }

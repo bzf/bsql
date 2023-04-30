@@ -6,6 +6,7 @@ mod internal;
 mod parser;
 mod print_table;
 
+use internal::{ColumnDefinition, DataType};
 use print_table::print_table;
 
 fn main() {
@@ -42,6 +43,21 @@ fn main() {
 
                 if let Some(table_names) = database_manager.database_table_names(&database_name) {
                     list_tables(table_names)
+                } else {
+                    println!("FATAL: Active database no longer exists.");
+                }
+            }
+
+            ["\\d+", table_name] => {
+                let Some(database_name) = &active_database else {
+                    println!("No active database selected.");
+                    continue;
+                };
+
+                if let Some(table_definition) =
+                    database_manager.table_definition(database_name, table_name)
+                {
+                    list_table_definition(table_definition)
                 } else {
                     println!("FATAL: Active database no longer exists.");
                 }
@@ -94,6 +110,16 @@ fn list_tables(table_names: Vec<String>) {
     print_table(
         vec!["Table name"],
         table_names.into_iter().map(|name| vec![name]).collect(),
+    );
+}
+
+fn list_table_definition(column_definitions: Vec<(String, ColumnDefinition)>) {
+    print_table(
+        vec!["Column name", "Data type"],
+        column_definitions
+            .into_iter()
+            .map(|(column_name, definition)| vec![column_name, definition.data_type().to_string()])
+            .collect(),
     );
 }
 
