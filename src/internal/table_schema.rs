@@ -4,7 +4,7 @@ use super::{ColumnDefinition, DataType};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct TableSchema {
-    next_column_index: u8,
+    next_column_id: u8,
 
     column_definitions: HashMap<String, ColumnDefinition>,
 }
@@ -12,7 +12,7 @@ pub struct TableSchema {
 impl TableSchema {
     pub fn new() -> Self {
         Self {
-            next_column_index: 0,
+            next_column_id: 0,
 
             column_definitions: HashMap::new(),
         }
@@ -33,9 +33,9 @@ impl TableSchema {
         if !self.column_definitions.contains_key(column_name) {
             self.column_definitions.insert(
                 column_name.to_string(),
-                ColumnDefinition::new(self.next_column_index, data_type),
+                ColumnDefinition::new(self.next_column_id, data_type),
             );
-            self.next_column_index += 1;
+            self.next_column_id += 1;
 
             return true;
         } else {
