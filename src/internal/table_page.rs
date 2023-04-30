@@ -82,6 +82,10 @@ impl TablePage {
         return Some(values);
     }
 
+    pub fn delete_record(&mut self, record_index: u8) {
+        self.slots_index.remove(record_index);
+    }
+
     pub fn serialize_page_header(&self) -> Vec<u8> {
         let mut page_header: Vec<u8> = Vec::with_capacity(self.page_header_size().into());
         page_header.push(self.column_definitions.len() as u8);
@@ -94,6 +98,10 @@ impl TablePage {
             });
 
         return page_header;
+    }
+
+    fn record_count(&self) -> usize {
+        self.slots_index.count()
     }
 
     fn page_header_size(&self) -> u8 {
@@ -150,12 +158,39 @@ mod tests {
     }
 
     #[test]
+    fn test_inserting_record_when_the_page_is_full() {
+        let column_definition = ColumnDefinition::new(1, DataType::Integer);
+
+        let mut table_page = TablePage::new(vec![column_definition.clone()]);
+        for _ in 0..u8::MAX {
+            table_page
+                .insert_record(vec![Value::Integer(3)])
+                .expect("Failed to insert record while filling the page");
+        }
+
+        let record_id = table_page.insert_record(vec![Value::Integer(3)]);
+        assert_eq!(None, record_id);
+    }
+
+    #[test]
     fn test_inserting_record_with_other_column_definitions() {
         let column_definition = ColumnDefinition::new(1, DataType::Integer);
         let mut table_page = TablePage::new(vec![column_definition.clone()]);
 
         let record_id = table_page.insert_record(vec![Value::Integer(3), Value::Integer(1)]);
         assert_eq!(None, record_id);
+    }
+
+    #[test]
+    fn test_inserting_and_deleting_record() {
+        let mut table_page = TablePage::new(vec![ColumnDefinition::new(1, DataType::Integer)]);
+
+        let record_id = table_page.insert_record(vec![Value::Integer(3)]);
+        assert!(record_id.is_some());
+        assert_eq!(1, table_page.record_count());
+
+        table_page.delete_record(record_id.unwrap());
+        assert_eq!(0, table_page.record_count());
     }
 
     #[test]

@@ -40,6 +40,11 @@ impl RangeSet {
         }
     }
 
+    pub fn remove(&mut self, value: u8) {
+        self.used.remove(&value);
+        self.available.insert(value);
+    }
+
     pub fn available(&self) -> usize {
         self.available.len()
     }
