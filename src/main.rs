@@ -6,7 +6,7 @@ mod internal;
 mod parser;
 mod print_table;
 
-use internal::{ColumnDefinition, DataType};
+use internal::{ColumnDefinition, DataType, Value};
 use print_table::print_table;
 
 fn main() {
@@ -88,10 +88,19 @@ fn main() {
                         }
                     }
 
-                    Some(Command::InsertInto {
-                        table_name: _,
-                        values: _,
-                    }) => (),
+                    Some(Command::InsertInto { table_name, values }) => {
+                        let Some(ref database_name) = active_database else {
+                            println!("No active database selected.");
+                            continue;
+                        };
+
+                        database_manager.insert_row(
+                            database_name,
+                            &table_name,
+                            values.into_iter().map(|value| value.into()).collect(),
+                        );
+                    }
+
                     None => (),
                 }
             }

@@ -1,12 +1,13 @@
 use std::collections::HashMap;
 
-use super::{DataType, TableSchema};
+use super::{DataType, TableSchema, TableStore, Value};
 
 type TableId = u64;
 
 pub struct Database {
     table_names: HashMap<String, TableId>,
     table_definitions: HashMap<TableId, TableSchema>,
+    table_stores: HashMap<TableId, TableStore>,
 
     next_table_id: TableId,
 }
@@ -16,6 +17,7 @@ impl Database {
         Self {
             table_definitions: HashMap::new(),
             table_names: HashMap::new(),
+            table_stores: HashMap::new(),
 
             next_table_id: 0,
         }
@@ -57,6 +59,27 @@ impl Database {
         };
 
         table_schema.add_column(column_name, data_type)
+    }
+
+    pub fn insert_row(&mut self, table_name: &str, values: Vec<Value>) -> bool {
+        let Some(table_id) = self.table_names.get(table_name) else {
+            return false;
+        };
+
+        let Some(table_schema) = self.table_definitions.get(table_id) else {
+            return false;
+        };
+
+        if values.len() != table_schema.column_definitions_len() {
+            return false;
+        }
+
+        let table_store = self
+            .table_stores
+            .entry(*table_id)
+            .or_insert(TableStore::new());
+
+        table_store.insert_record(values).is_some()
     }
 
     fn table_exists(&self, table_name: &str) -> bool {
@@ -106,5 +129,29 @@ mod tests {
         let result = database.add_column(table_name, "age", DataType::Integer);
 
         assert!(result, "Failed to add column to table");
+    }
+
+    #[test]
+    fn inserting_row_to_a_table() {
+        let mut database = Database::new();
+        let table_name = "new_table";
+        assert!(database.create_table(table_name).is_some());
+        assert!(database.add_column(table_name, "age", DataType::Integer));
+
+        let result = database.insert_row(table_name, vec![Value::Integer(3)]);
+
+        assert!(result, "Failed to insert row to table");
+    }
+
+    #[test]
+    fn inserting_row_with_different_len_values() {
+        let mut database = Database::new();
+        let table_name = "new_table";
+        assert!(database.create_table(table_name).is_some());
+        assert!(database.add_column(table_name, "age", DataType::Integer));
+
+        let result = database.insert_row(table_name, vec![Value::Integer(3), Value::Integer(5)]);
+
+        assert_eq!(result, false);
     }
 }

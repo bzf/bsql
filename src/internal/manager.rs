@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use super::{ColumnDefinition, DataType, Database};
+use super::{ColumnDefinition, DataType, Database, Value};
 
 pub struct Manager {
     database_definitions: HashMap<String, Database>,
@@ -73,6 +73,25 @@ impl Manager {
         } else {
             println!("error: Database '{}' already exists.", name);
             return None;
+        }
+    }
+
+    pub fn insert_row(
+        &mut self,
+        database_name: &str,
+        table_name: &str,
+        values: Vec<Value>,
+    ) -> bool {
+        let Some(database) = self.database_definitions.get_mut(database_name) else {
+            return false;
+        };
+
+        if database.insert_row(table_name, values) {
+            println!("INSERT INTO");
+            return true;
+        } else {
+            println!("ERROR: INSERT failed.");
+            return false;
         }
     }
 }
