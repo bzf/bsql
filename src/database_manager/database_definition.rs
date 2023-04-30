@@ -2,11 +2,11 @@ use std::collections::HashMap;
 
 use crate::internal::TableSchema;
 
-pub struct Database {
+pub struct DatabaseDefinition {
     table_definitions: HashMap<String, TableSchema>,
 }
 
-impl Database {
+impl DatabaseDefinition {
     pub fn new() -> Self {
         Self {
             table_definitions: HashMap::new(),
@@ -40,7 +40,7 @@ mod tests {
 
     #[test]
     fn test_creating_new_table_without_columns() {
-        let mut database = Database::new();
+        let mut database = DatabaseDefinition::new();
 
         let result = database.create_table("foobar");
 
@@ -49,7 +49,7 @@ mod tests {
 
     #[test]
     fn test_creating_new_table_with_columns() {
-        let mut database = Database::new();
+        let mut database = DatabaseDefinition::new();
 
         let result = database.create_table("foobar");
 
@@ -58,7 +58,7 @@ mod tests {
 
     #[test]
     fn test_creating_table_that_already_exists() {
-        let mut database = Database::new();
+        let mut database = DatabaseDefinition::new();
         let table_name = "new_database";
         assert!(database.create_table(table_name).is_some());
 
