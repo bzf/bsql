@@ -19,6 +19,10 @@ impl RangeSet {
         }
     }
 
+    pub fn contains(&self, value: u8) -> bool {
+        self.used.contains(&value)
+    }
+
     pub fn consume(&mut self) -> Option<u8> {
         let available_key = self.available.iter().next()?.clone();
         self.insert(available_key);
@@ -57,6 +61,8 @@ mod tests {
     fn test_that_it_works() {
         let mut range_set = RangeSet::new(0..2);
 
+        assert_eq!(false, range_set.contains(0));
+
         assert_eq!(2, range_set.available());
         assert_eq!(0, range_set.count());
         assert!(!range_set.is_full());
@@ -65,6 +71,8 @@ mod tests {
         assert_eq!(1, range_set.available());
         assert_eq!(1, range_set.count());
         assert!(!range_set.is_full());
+
+        assert!(range_set.contains(0));
 
         assert!(range_set.insert(1));
         assert_eq!(0, range_set.available());

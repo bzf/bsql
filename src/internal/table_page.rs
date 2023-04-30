@@ -1,4 +1,4 @@
-use super::{ColumnDefinition, DataType, Value};
+use super::{ColumnDefinition, DataType, RangeSet, Value};
 
 /// A `TablePage` is a struct that represents a full page of data + metadata of records (and their
 /// columns) that are stored in a table.
@@ -13,8 +13,8 @@ pub struct TablePage {
 
     // TODO: Maybe this could be a set of available upcoming indexes? When deleting something we
     // can mark it as available in the `TableIndex` and remove it from the set.
-    next_record_index: u8,
-
+    slots_index: RangeSet,
+    // next_record_index: u8,
     /// The `data_page` holds the serialized version of all records.
     data_page: Vec<u8>,
 }
@@ -23,9 +23,9 @@ impl TablePage {
     pub fn new(column_definitions: Vec<ColumnDefinition>) -> Self {
         Self {
             column_definitions,
-            next_record_index: 0,
-
-            data_page: Vec::with_capacity(4096),
+            slots_index: RangeSet::new(0..255),
+            // next_record_index: 0,
+            data_page: vec![0; 4096],
         }
     }
 
@@ -33,26 +33,30 @@ impl TablePage {
     /// relative index of the record in the page.
     /// Return `None` when the page is full.
     pub fn insert_record(&mut self, record_data: Vec<Value>) -> Option<u8> {
-        if record_data.len() != self.column_definitions.len() {
+        if self.slots_index.is_full() {
+            return None;
+        } else if record_data.len() != self.column_definitions.len() {
             return None;
         }
 
-        let record_index = self.next_record_index;
-        self.next_record_index += 1;
+        let record_index = self.slots_index.consume()?;
 
-        let mut record_data: Vec<u8> = record_data
+        let record_data: Vec<u8> = record_data
             .into_iter()
             .flat_map(|value| value.to_bsql_data())
             .collect();
 
-        self.data_page.append(&mut record_data);
+        let record_size: usize = self.record_size() as usize;
+        let start_index: usize = (record_index as usize * record_size) as usize;
+        self.data_page
+            .splice(start_index..(start_index + record_size), record_data);
 
         Some(record_index)
     }
 
     pub fn get_record(&self, record_index: u8) -> Option<Vec<Value>> {
         // Check if we have a record on that slot.
-        if record_index >= self.next_record_index {
+        if !self.slots_index.contains(record_index) {
             return None;
         }
 
@@ -116,13 +120,12 @@ mod tests {
         let mut table_page = TablePage::new(vec![column_definition.clone()]);
 
         let record_id = table_page.insert_record(vec![Value::Integer(3)]);
-        assert_eq!(
-            Some(0),
-            record_id,
+        assert!(
+            record_id.is_some(),
             "Failed to insert the record into the page."
         );
 
-        let record_data = table_page.get_record(0);
+        let record_data = table_page.get_record(record_id.unwrap());
         assert_eq!(Some(vec![Value::Integer(3)]), record_data);
     }
 
@@ -134,13 +137,12 @@ mod tests {
         ]);
 
         let record_id = table_page.insert_record(vec![Value::Integer(3), Value::Integer(5)]);
-        assert_eq!(
-            Some(0),
-            record_id,
+        assert!(
+            record_id.is_some(),
             "Failed to insert the record into the page."
         );
 
-        let record_data = table_page.get_record(0);
+        let record_data = table_page.get_record(record_id.unwrap());
         assert_eq!(
             Some(vec![Value::Integer(3), Value::Integer(5)]),
             record_data
