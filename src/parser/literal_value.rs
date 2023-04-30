@@ -1,4 +1,4 @@
-use crate::tokenizer::Token;
+use super::tokenizer::Token;
 
 #[derive(Debug, PartialEq)]
 pub enum LiteralValue {

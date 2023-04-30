@@ -1,6 +1,9 @@
+mod literal_value;
+mod tokenizer;
+
 use crate::internal::{ColumnDefinition, DataType, TableSchema};
-use crate::literal_value::LiteralValue;
-use crate::tokenizer::Token;
+use literal_value::LiteralValue;
+use tokenizer::Token;
 
 #[derive(Debug, PartialEq)]
 pub enum Command {
@@ -20,7 +23,7 @@ pub enum Command {
 
 // TODO: Only reads one command at a time and ignores any tokens after that.
 pub fn parse(input: &str) -> Option<Command> {
-    let tokens = crate::tokenizer::tokenize(input);
+    let tokens = tokenizer::tokenize(input);
 
     let command_tokens: Vec<Token> = tokens
         .into_iter()
@@ -159,7 +162,7 @@ fn parse_column_definition(
 
 #[cfg(test)]
 mod tests {
-    use crate::literal_value::LiteralValue;
+    use literal_value::LiteralValue;
 
     use super::*;
 

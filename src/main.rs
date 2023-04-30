@@ -4,9 +4,7 @@ use crate::parser::Command;
 
 mod database_manager;
 mod internal;
-mod literal_value;
 mod parser;
-mod tokenizer;
 
 fn main() {
     let mut database_manager = database_manager::DatabaseManager::new();
