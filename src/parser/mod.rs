@@ -22,6 +22,11 @@ pub enum Command {
         table_name: String,
         values: Vec<LiteralValue>,
     },
+
+    Select {
+        identifiers: Vec<String>,
+        table_name: String,
+    },
 }
 
 // TODO: Only reads one command at a time and ignores any tokens after that.
@@ -36,6 +41,7 @@ pub fn parse(input: &str) -> Option<Command> {
     match command_tokens.first() {
         Some(Token::CreateKeyword) => parse_create_command(command_tokens),
         Some(Token::InsertKeyword) => parse_insert_command(command_tokens),
+        Some(Token::SelectKeyword) => parse_select_command(command_tokens),
 
         _ => None,
     }
@@ -62,6 +68,40 @@ fn parse_create_command(mut tokens: Vec<Token>) -> Option<Command> {
 
         _ => None,
     }
+}
+
+fn parse_select_command(tokens: Vec<Token>) -> Option<Command> {
+    let mut tokens = tokens.into_iter().peekable();
+    let Some(Token::SelectKeyword) = tokens.next() else {
+        // Expected to start with a `SelectKeyword`
+        return None;
+    };
+
+    let mut identifiers: Vec<String> = vec![];
+
+    loop {
+        match tokens.next() {
+            Some(Token::Comma) => (),
+            Some(Token::Asterisk) => identifiers.push("*".to_string()),
+            Some(Token::Identifier(name)) => identifiers.push(name),
+
+            Some(Token::FromKeyword) => break,
+
+            _ => {
+                // Unexpected token
+                return None;
+            }
+        }
+    }
+
+    let Token::Identifier(table_name) = tokens.next()? else {
+        return None; // Expeceted a table_name identifier
+    };
+
+    return Some(Command::Select {
+        identifiers,
+        table_name,
+    });
 }
 
 fn parse_insert_command(mut tokens: Vec<Token>) -> Option<Command> {
@@ -213,6 +253,17 @@ mod tests {
                 values: vec![LiteralValue::Integer(12), LiteralValue::Integer(14)]
             }),
             parse("INSERT INTO users2 VALUES (12, 14);"),
+        );
+    }
+
+    #[test]
+    fn test_parsing_select_all() {
+        assert_eq!(
+            Some(Command::Select {
+                identifiers: vec!["*".to_string()],
+                table_name: "my_table".to_string(),
+            }),
+            parse("SELECT * FROM my_table;"),
         );
     }
 }

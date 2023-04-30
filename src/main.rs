@@ -101,6 +101,11 @@ fn main() {
                         );
                     }
 
+                    Some(Command::Select {
+                        identifiers: _,
+                        table_name: _,
+                    }) => todo!(),
+
                     None => (),
                 }
             }
