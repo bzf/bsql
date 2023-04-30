@@ -4,6 +4,9 @@ use crate::parser::Command;
 
 mod internal;
 mod parser;
+mod print_table;
+
+use print_table::print_table;
 
 fn main() {
     let mut database_manager = internal::Manager::new();
@@ -81,19 +84,17 @@ fn main() {
 }
 
 fn list_databases(database_names: Vec<String>) {
-    database_names
-        .iter()
-        .for_each(|database_name| println!("{}", database_name));
-
-    println!("({} rows)", database_names.len());
+    print_table(
+        vec!["Database name"],
+        database_names.into_iter().map(|name| vec![name]).collect(),
+    );
 }
 
 fn list_tables(table_names: Vec<String>) {
-    table_names
-        .iter()
-        .for_each(|table_name| println!("{}", table_name));
-
-    println!("({} rows)", table_names.len());
+    print_table(
+        vec!["Table name"],
+        table_names.into_iter().map(|name| vec![name]).collect(),
+    );
 }
 
 fn prompt(name: &str) -> String {
