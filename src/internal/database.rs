@@ -117,10 +117,7 @@ impl Database {
         }
 
         println!("{:?}", selected_definitions);
-        let column_indices: Vec<u8> = selected_definitions
-            .iter()
-            .map(|d| d.column_index())
-            .collect();
+        let column_indices: Vec<u8> = selected_definitions.iter().map(|d| d.column_id()).collect();
 
         if let Some(table_store) = self.table_stores.get(table_id) {
             return Some(

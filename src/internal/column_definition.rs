@@ -14,7 +14,7 @@ impl ColumnDefinition {
         }
     }
 
-    pub fn column_index(&self) -> u8 {
+    pub fn column_id(&self) -> u8 {
         self.column_id
     }
 
