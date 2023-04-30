@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
-use super::DatabaseDefinition;
+use super::Database;
 
 pub struct Manager {
-    database_definitions: HashMap<String, DatabaseDefinition>,
+    database_definitions: HashMap<String, Database>,
 }
 
 impl Manager {
@@ -41,7 +41,7 @@ impl Manager {
     pub fn create_database(&mut self, name: &str) -> Option<()> {
         if !self.database_definitions.contains_key(name) {
             self.database_definitions
-                .insert(name.to_string(), DatabaseDefinition::new());
+                .insert(name.to_string(), Database::new());
 
             println!("CREATE DATABASE");
             return Some(());
