@@ -57,13 +57,13 @@ fn main() {
                         database_manager.create_database(&database_name);
                     }
 
-                    Some(Command::CreateTable { schema }) => {
+                    Some(Command::CreateTable { table_name, .. }) => {
                         let Some(ref database_name) = active_database else {
                             println!("No active database selected.");
                             continue;
                         };
 
-                        if database_manager.create_table(database_name, schema) {
+                        if database_manager.create_table(database_name, &table_name) {
                             println!("CREATE TABLE");
                         } else {
                             println!("ERROR: Table \"{}\" already exists.", database_name);

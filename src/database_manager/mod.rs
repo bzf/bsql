@@ -1,7 +1,5 @@
 use std::collections::HashMap;
 
-use crate::internal::TableSchema;
-
 mod database;
 
 pub struct DatabaseManager {
@@ -29,12 +27,15 @@ impl DatabaseManager {
         self.databases.contains_key(key)
     }
 
-    pub fn create_table(&mut self, database_name: &str, table_schema: TableSchema) -> bool {
-        let Some(database) = self.databases.get_mut(database_name) else {
+    pub fn create_table(&mut self, database_name: &str, table_name: &str) -> bool {
+        let Some(_database) = self.databases.get_mut(database_name) else {
             return false;
         };
 
-        database.create_table(&table_schema).is_some()
+        self.databases
+            .get_mut(database_name)
+            .and_then(|database| database.create_table(table_name))
+            .is_some()
     }
 
     pub fn create_database(&mut self, name: &str) -> Option<()> {

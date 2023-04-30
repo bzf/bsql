@@ -1,9 +1,11 @@
+mod data_type_identifier;
 mod literal_value;
 mod tokenizer;
 
-use crate::internal::{ColumnDefinition, DataType, TableSchema};
 use literal_value::LiteralValue;
 use tokenizer::Token;
+
+pub use data_type_identifier::DataTypeIdentifier;
 
 #[derive(Debug, PartialEq)]
 pub enum Command {
@@ -12,7 +14,8 @@ pub enum Command {
     },
 
     CreateTable {
-        schema: TableSchema,
+        table_name: String,
+        column_definitions: Vec<(String, DataTypeIdentifier)>,
     },
 
     InsertInto {
@@ -114,11 +117,12 @@ fn parse_insert_command(mut tokens: Vec<Token>) -> Option<Command> {
 
 fn parse_create_table_command(identifier: String, tokens: Vec<Token>) -> Option<Command> {
     Some(Command::CreateTable {
-        schema: TableSchema::new(identifier, parse_column_definitions(tokens)?),
+        table_name: identifier,
+        column_definitions: parse_column_definitions(tokens)?,
     })
 }
 
-fn parse_column_definitions(tokens: Vec<Token>) -> Option<Vec<ColumnDefinition>> {
+fn parse_column_definitions(tokens: Vec<Token>) -> Option<Vec<(String, DataTypeIdentifier)>> {
     let mut column_info_list = vec![];
     let mut tokens = tokens.into_iter().peekable();
 
@@ -149,11 +153,11 @@ fn parse_column_definitions(tokens: Vec<Token>) -> Option<Vec<ColumnDefinition>>
 fn parse_column_definition(
     identifier_token: Token,
     data_type_token: Token,
-) -> Option<ColumnDefinition> {
+) -> Option<(String, DataTypeIdentifier)> {
     match identifier_token {
         Token::Identifier(identifier) => {
-            let data_type: Option<DataType> = data_type_token.into();
-            Some(ColumnDefinition::new(identifier, data_type?))
+            let data_type: Option<DataTypeIdentifier> = data_type_token.into();
+            Some((identifier, data_type?))
         }
 
         _ => None,
@@ -180,13 +184,11 @@ mod tests {
     fn test_parsing_create_table_expression() {
         assert_eq!(
             Some(Command::CreateTable {
-                schema: TableSchema::new(
-                    "users".to_string(),
-                    vec![
-                        ColumnDefinition::new("age".to_string(), DataType::Integer),
-                        ColumnDefinition::new("birthyear".to_string(), DataType::Integer)
-                    ]
-                )
+                table_name: "users".to_string(),
+                column_definitions: vec![
+                    ("age".to_string(), DataTypeIdentifier::Integer),
+                    ("birthyear".to_string(), DataTypeIdentifier::Integer)
+                ]
             }),
             parse("CREATE TABLE users (age integer, birthyear integer);"),
         );
