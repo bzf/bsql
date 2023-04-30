@@ -19,10 +19,8 @@ impl DatabaseDefinition {
 
     pub fn create_table(&mut self, table_name: &str) -> Option<()> {
         if !self.table_exists(table_name) {
-            self.table_definitions.insert(
-                table_name.to_string(),
-                TableSchema::new(table_name.to_string()),
-            );
+            self.table_definitions
+                .insert(table_name.to_string(), TableSchema::new());
             Some(())
         } else {
             None
