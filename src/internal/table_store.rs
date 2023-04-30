@@ -30,6 +30,10 @@ impl TableStore {
         Some(record_id)
     }
 
+    pub fn all_records(&self) -> Vec<RecordData> {
+        return self.records.values().cloned().collect();
+    }
+
     pub fn get_record(&self, internal_id: InternalId) -> Option<&RecordData> {
         self.records.get(&internal_id)
     }

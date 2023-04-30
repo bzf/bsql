@@ -6,14 +6,14 @@ mod internal;
 mod parser;
 mod print_table;
 
-use internal::{ColumnDefinition, DataType, Value};
+use internal::ColumnDefinition;
 use print_table::print_table;
 
 fn main() {
     let mut database_manager = internal::Manager::new();
     let mut active_database: Option<String> = None;
 
-    loop {
+    'prompt_loop: loop {
         let expression = if let Some(database_name) = &active_database {
             prompt(&format!("{}> ", database_name))
         } else {
@@ -102,9 +102,71 @@ fn main() {
                     }
 
                     Some(Command::Select {
-                        identifiers: _,
-                        table_name: _,
-                    }) => todo!(),
+                        identifiers,
+                        table_name,
+                    }) => {
+                        let Some(ref database_name) = active_database else {
+                            println!("No active database selected.");
+                            continue;
+                        };
+
+                        let Some(table_definitions) = database_manager.table_definition(database_name, &table_name) else {
+                            println!("FATAL: Table does not exist.");
+                            continue;
+                        };
+
+                        let table_names: Vec<&String> =
+                            table_definitions.iter().map(|(k, _)| k).collect();
+
+                        match &identifiers
+                            .iter()
+                            .map(|i| i.as_str())
+                            .collect::<Vec<&str>>()[..]
+                        {
+                            ["*"] => {
+                                let records = database_manager
+                                    .select_all(database_name, &table_name)
+                                    .unwrap();
+
+                                print_table(
+                                    table_definitions.iter().map(|(k, _)| k.as_str()).collect(),
+                                    records
+                                        .into_iter()
+                                        .map(|row| {
+                                            row.into_iter().map(|value| value.to_string()).collect()
+                                        })
+                                        .collect(),
+                                );
+                            }
+
+                            _ => {
+                                for identifier in identifiers.iter() {
+                                    if !table_names.contains(&&identifier) {
+                                        println!(
+                                            "ERROR: column \"{}\" does not exist.",
+                                            identifier
+                                        );
+
+                                        continue 'prompt_loop;
+                                    }
+                                }
+
+                                let records = database_manager
+                                    .select(database_name, &table_name, identifiers.clone())
+                                    .unwrap();
+
+                                print_table(
+                                    identifiers.iter().map(|i| i.as_str()).collect(),
+                                    records
+                                        .into_iter()
+                                        .map(|row| {
+                                            row.into_iter().map(|value| value.to_string()).collect()
+                                        })
+                                        .collect(),
+                                );
+                            }
+                        }
+                    }
 
                     None => (),
                 }

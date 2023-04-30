@@ -94,4 +94,28 @@ impl Manager {
             return false;
         }
     }
+
+    pub fn select_all(&self, database_name: &str, table_name: &str) -> Option<Vec<Vec<Value>>> {
+        let Some(database) = self.database_definitions.get(database_name) else {
+            return None;
+        };
+
+        return database.select_all_columns(table_name);
+    }
+
+    pub fn select(
+        &self,
+        database_name: &str,
+        table_name: &str,
+        columns: Vec<String>,
+    ) -> Option<Vec<Vec<Value>>> {
+        let Some(database) = self.database_definitions.get(database_name) else {
+            return None;
+        };
+
+        return database.select_columns(
+            table_name,
+            columns.iter().map(|i| i.as_str()).collect::<Vec<&str>>(),
+        );
+    }
 }

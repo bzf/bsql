@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use super::{DataType, TableSchema, TableStore, Value};
+use super::{ColumnDefinition, DataType, TableSchema, TableStore, Value};
 
 type TableId = u64;
 
@@ -82,6 +82,65 @@ impl Database {
         table_store.insert_record(values).is_some()
     }
 
+    pub fn select_all_columns(&self, table_name: &str) -> Option<Vec<Vec<Value>>> {
+        let Some(table_id) = self.table_names.get(table_name) else {
+            return None;
+        };
+
+        if let Some(table_store) = self.table_stores.get(table_id) {
+            return Some(table_store.all_records());
+        } else {
+            return Some(vec![]);
+        };
+    }
+
+    pub fn select_columns(&self, table_name: &str, columns: Vec<&str>) -> Option<Vec<Vec<Value>>> {
+        let Some(table_id) = self.table_names.get(table_name) else {
+            return None;
+        };
+
+        let Some(table_schema) = self.table_definitions.get(table_id) else {
+            return None;
+        };
+
+        let definitions = table_schema.column_definitions();
+
+        let selected_definitions: Vec<&ColumnDefinition> = columns
+            .iter()
+            .flat_map(|name| definitions.iter().find(|(key, _)| key == name))
+            .map(|(_, definition)| definition)
+            .collect();
+
+        if selected_definitions.len() != columns.len() {
+            // Invalid columns
+            return None;
+        }
+
+        println!("{:?}", selected_definitions);
+        let column_indices: Vec<u8> = selected_definitions
+            .iter()
+            .map(|d| d.column_index())
+            .collect();
+
+        if let Some(table_store) = self.table_stores.get(table_id) {
+            return Some(
+                table_store
+                    .all_records()
+                    .into_iter()
+                    .map(|row| {
+                        column_indices
+                            .iter()
+                            .map(|index| row.get(*index as usize).unwrap())
+                            .cloned()
+                            .collect()
+                    })
+                    .collect(),
+            );
+        } else {
+            return Some(vec![]);
+        };
+    }
+
     fn table_exists(&self, table_name: &str) -> bool {
         self.table_names.contains_key(table_name)
     }
@@ -153,5 +212,62 @@ mod tests {
         let result = database.insert_row(table_name, vec![Value::Integer(3), Value::Integer(5)]);
 
         assert_eq!(result, false);
+    }
+
+    #[test]
+    fn select_all_from_table() {
+        let mut database = Database::new();
+        let table_name = "new_table";
+        assert!(database.create_table(table_name).is_some());
+        assert!(database.add_column(table_name, "age", DataType::Integer));
+        assert!(database.insert_row(table_name, vec![Value::Integer(5)]));
+
+        let result = database
+            .select_all_columns(table_name)
+            .expect("Failed to select from database");
+
+        assert_eq!(vec![vec![Value::Integer(5)]], result);
+    }
+
+    #[test]
+    fn select_all_from_empty_table() {
+        let mut database = Database::new();
+        let table_name = "new_table";
+        assert!(database.create_table(table_name).is_some());
+
+        let result = database
+            .select_all_columns(table_name)
+            .expect("Failed to select from database");
+
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn select_from_table() {
+        let mut database = Database::new();
+        let table_name = "new_table";
+        assert!(database.create_table(table_name).is_some());
+        assert!(database.add_column(table_name, "age", DataType::Integer));
+        assert!(database.add_column(table_name, "birthday", DataType::Integer));
+        assert!(database.insert_row(table_name, vec![Value::Integer(5), Value::Integer(3)]));
+
+        let result = database
+            .select_columns(table_name, vec!["birthday"])
+            .expect("Failed to select from database");
+
+        assert_eq!(vec![vec![Value::Integer(3)]], result);
+    }
+
+    #[test]
+    fn select_with_column_that_doesnt_exist() {
+        let mut database = Database::new();
+        let table_name = "new_table";
+        assert!(database.create_table(table_name).is_some());
+        assert!(database.add_column(table_name, "age", DataType::Integer));
+        assert!(database.insert_row(table_name, vec![Value::Integer(5)]));
+
+        let result = database.select_columns(table_name, vec!["lol123"]);
+
+        assert_eq!(None, result);
     }
 }
