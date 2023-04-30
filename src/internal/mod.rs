@@ -1,3 +1,8 @@
+mod database_definition;
+mod manager;
 mod table_schema;
 
-pub use table_schema::TableSchema;
+use database_definition::DatabaseDefinition;
+use table_schema::TableSchema;
+
+pub use manager::Manager;

@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 
-mod database_definition;
+use super::DatabaseDefinition;
 
-pub struct DatabaseManager {
-    database_definitions: HashMap<String, database_definition::DatabaseDefinition>,
+pub struct Manager {
+    database_definitions: HashMap<String, DatabaseDefinition>,
 }
 
-impl DatabaseManager {
+impl Manager {
     pub fn new() -> Self {
         Self {
             database_definitions: HashMap::new(),
@@ -40,10 +40,8 @@ impl DatabaseManager {
 
     pub fn create_database(&mut self, name: &str) -> Option<()> {
         if !self.database_definitions.contains_key(name) {
-            self.database_definitions.insert(
-                name.to_string(),
-                database_definition::DatabaseDefinition::new(),
-            );
+            self.database_definitions
+                .insert(name.to_string(), DatabaseDefinition::new());
 
             println!("CREATE DATABASE");
             return Some(());

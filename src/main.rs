@@ -2,12 +2,11 @@ use std::io::Write;
 
 use crate::parser::Command;
 
-mod database_manager;
 mod internal;
 mod parser;
 
 fn main() {
-    let mut database_manager = database_manager::DatabaseManager::new();
+    let mut database_manager = internal::Manager::new();
     let mut active_database: Option<String> = None;
 
     loop {

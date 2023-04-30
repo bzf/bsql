@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::internal::TableSchema;
+use super::TableSchema;
 
 pub struct DatabaseDefinition {
     table_definitions: HashMap<String, TableSchema>,
