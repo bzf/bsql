@@ -2,6 +2,7 @@ mod column_definition;
 mod data_type;
 mod database;
 mod manager;
+mod range_set;
 mod table_page;
 mod table_schema;
 mod table_store;
