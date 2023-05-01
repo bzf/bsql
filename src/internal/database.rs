@@ -1,11 +1,12 @@
 use std::collections::HashMap;
 
-use super::{ColumnDefinition, DataType, TableSchema, TableStore, Value};
+use super::{ColumnDefinition, DataType, TableManager, TableSchema, TableStore, Value};
 
 type TableId = u64;
 
 pub struct Database {
     table_names: HashMap<String, TableId>,
+    tables: HashMap<TableId, TableManager>,
     table_definitions: HashMap<TableId, TableSchema>,
     table_stores: HashMap<TableId, TableStore>,
 
@@ -16,6 +17,8 @@ impl Database {
     pub fn new() -> Self {
         Self {
             table_definitions: HashMap::new(),
+            tables: HashMap::new(),
+
             table_names: HashMap::new(),
             table_stores: HashMap::new(),
 
@@ -41,6 +44,7 @@ impl Database {
             self.next_table_id += 1;
 
             self.table_names.insert(table_name.to_string(), table_id);
+            self.tables.insert(table_id, TableManager::new(table_id));
             self.table_definitions.insert(table_id, TableSchema::new());
 
             Some(table_id)
@@ -58,7 +62,14 @@ impl Database {
             return false;
         };
 
-        table_schema.add_column(column_name, data_type)
+        let Some(table_manager) = self.tables.get_mut(table_id) else {
+            return false;
+        };
+
+        table_schema.add_column(column_name, data_type.clone());
+        table_manager.add_column(column_name, data_type);
+
+        return true;
     }
 
     pub fn insert_row(&mut self, table_name: &str, values: Vec<Value>) -> bool {

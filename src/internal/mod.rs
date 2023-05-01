@@ -3,6 +3,7 @@ mod data_type;
 mod database;
 mod manager;
 mod range_set;
+mod table_manager;
 mod table_page;
 mod table_schema;
 mod table_store;
@@ -10,6 +11,7 @@ mod value;
 
 use database::Database;
 use range_set::RangeSet;
+use table_manager::TableManager;
 use table_schema::TableSchema;
 use table_store::TableStore;
 
