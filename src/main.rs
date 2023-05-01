@@ -116,6 +116,7 @@ fn main() {
                     Some(Command::Select {
                         identifiers,
                         table_name,
+                        ..
                     }) => {
                         let Some(ref database_name) = active_database else {
                             println!("No active database selected.");

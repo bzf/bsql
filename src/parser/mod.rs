@@ -26,7 +26,20 @@ pub enum Command {
     Select {
         identifiers: Vec<String>,
         table_name: String,
+        where_conditions: Vec<ConditionExpression>,
     },
+}
+
+#[derive(Debug, PartialEq)]
+pub struct ConditionExpression {
+    lhs: String,
+    comparison: CompareOperation,
+    rhs: LiteralValue,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum CompareOperation {
+    Equality,
 }
 
 // TODO: Only reads one command at a time and ignores any tokens after that.
@@ -98,9 +111,21 @@ fn parse_select_command(tokens: Vec<Token>) -> Option<Command> {
         return None; // Expeceted a table_name identifier
     };
 
+    let mut where_conditions = vec![];
+
+    match tokens.next() {
+        Some(Token::WhereKeyword) => {
+            if let Some(where_expression) = parse_condition_expression(tokens.collect()) {
+                where_conditions.push(where_expression);
+            }
+        }
+        _ => (),
+    }
+
     return Some(Command::Select {
         identifiers,
         table_name,
+        where_conditions,
     });
 }
 
@@ -203,6 +228,25 @@ fn parse_column_definition(
     }
 }
 
+fn parse_condition_expression(tokens: Vec<Token>) -> Option<ConditionExpression> {
+    let mut token_iter = tokens.into_iter();
+    let Some(Token::Identifier(lhs)) = token_iter.next() else {
+        return None;
+    };
+
+    let Some(Token::EqualSign) = token_iter.next() else {
+        return None;
+    };
+
+    let rhs: Option<LiteralValue> = token_iter.next()?.into();
+
+    Some(ConditionExpression {
+        lhs,
+        rhs: rhs?,
+        comparison: CompareOperation::Equality,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use literal_value::LiteralValue;
@@ -261,8 +305,41 @@ mod tests {
             Some(Command::Select {
                 identifiers: vec!["*".to_string()],
                 table_name: "my_table".to_string(),
+                where_conditions: vec![],
             }),
             parse("SELECT * FROM my_table;"),
+        );
+    }
+
+    #[test]
+    fn test_parsing_select_with_where_condition() {
+        assert_eq!(
+            Some(Command::Select {
+                identifiers: vec!["*".to_string()],
+                table_name: "my_table".to_string(),
+                where_conditions: vec![ConditionExpression {
+                    lhs: "favorite_number".to_string(),
+                    comparison: CompareOperation::Equality,
+                    rhs: LiteralValue::Integer(42),
+                }]
+            }),
+            parse("SELECT * FROM my_table WHERE favorite_number = 42;"),
+        );
+    }
+
+    #[test]
+    fn test_parsing_condition_expression() {
+        assert_eq!(
+            Some(ConditionExpression {
+                lhs: "user_id".to_string(),
+                comparison: CompareOperation::Equality,
+                rhs: LiteralValue::Integer(3),
+            }),
+            parse_condition_expression(vec![
+                Token::Identifier("user_id".to_string()),
+                Token::EqualSign,
+                Token::NumericLiteral(3.to_string()),
+            ])
         );
     }
 }
