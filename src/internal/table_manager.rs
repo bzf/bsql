@@ -27,6 +27,21 @@ impl TableManager {
         }
     }
 
+    pub fn column_definitions(&self) -> Vec<(String, ColumnDefinition)> {
+        self.column_names
+            .iter()
+            .map(|(column_name, column_id)| {
+                (
+                    column_name.to_string(),
+                    self.column_definitions
+                        .get(*column_id as usize)
+                        .unwrap()
+                        .clone(),
+                )
+            })
+            .collect()
+    }
+
     pub fn add_column(&mut self, column_name: &str, data_type: DataType) {
         self.column_names
             .insert(column_name.to_string(), self.next_column_id as u8);

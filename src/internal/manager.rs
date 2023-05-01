@@ -30,8 +30,7 @@ impl Manager {
     ) -> Option<Vec<(String, ColumnDefinition)>> {
         self.database_definitions
             .get(database_name)
-            .and_then(|database| database.table_schema(table_name))
-            .map(|schema| schema.column_definitions())
+            .and_then(|database| database.column_definitions(table_name))
     }
 
     pub fn database_exists(&self, key: &str) -> bool {

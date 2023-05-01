@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use super::{ColumnDefinition, DataType, TableManager, TablePage, TableSchema, TableStore, Value};
+use super::{ColumnDefinition, DataType, TableManager, TableSchema, TableStore, Value};
 
 type TableId = u64;
 
@@ -30,12 +30,14 @@ impl Database {
         self.table_names.keys().cloned().collect()
     }
 
-    pub fn table_schema(&self, table_name: &str) -> Option<&TableSchema> {
+    pub fn column_definitions(&self, table_name: &str) -> Option<Vec<(String, ColumnDefinition)>> {
         let Some(table_id) = self.table_names.get(table_name) else {
             return None;
         };
 
-        self.table_definitions.get(table_id)
+        self.tables
+            .get(table_id)
+            .map(|table_manager| table_manager.column_definitions())
     }
 
     pub fn create_table(&mut self, table_name: &str) -> Option<TableId> {
