@@ -10,7 +10,7 @@ pub struct TableManager {
     table_id: u64,
     next_column_id: ColumnId,
 
-    pages: HashMap<Vec<ColumnId>, Vec<LockedTablePage>>,
+    column_pages: HashMap<Vec<ColumnId>, Vec<LockedTablePage>>,
 
     column_names: HashMap<String, ColumnId>,
     column_definitions: Vec<ColumnDefinition>,
@@ -25,7 +25,7 @@ impl TableManager {
             column_names: HashMap::new(),
             column_definitions: Vec::new(),
 
-            pages: HashMap::new(),
+            column_pages: HashMap::new(),
         }
     }
 
@@ -66,7 +66,7 @@ impl TableManager {
     pub fn get_records(&self) -> Vec<Vec<Option<Value>>> {
         let mut records: Vec<Vec<Option<Value>>> = Vec::new();
 
-        for locked_page in self.pages.values().flatten() {
+        for locked_page in self.column_pages.values().flatten() {
             let page = locked_page.read().unwrap();
 
             let page_columns = page.column_definitions();
@@ -138,7 +138,7 @@ impl TableManager {
             .collect();
 
         let page_vec: &mut Vec<LockedTablePage> =
-            self.pages.entry(column_ids).or_insert(Vec::new());
+            self.column_pages.entry(column_ids).or_insert(Vec::new());
 
         // Check if the last page, if any, is full and if so create a new one.
         // If there are no pages, create one.
