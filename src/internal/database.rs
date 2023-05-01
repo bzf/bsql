@@ -77,7 +77,7 @@ impl Database {
             return false;
         }
 
-        table_manager.insert_record(values)
+        table_manager.insert_record(values).is_some()
     }
 
     pub fn select_all_columns(&self, table_name: &str) -> Option<Vec<Vec<Option<Value>>>> {
@@ -256,5 +256,21 @@ mod tests {
         let result = database.select_columns_by_name(table_name, vec!["lol123"]);
 
         assert_eq!(None, result);
+    }
+
+    #[test]
+    fn test_inserting_record_and_getting_it_back_out() {
+        let mut table_manager = TableManager::new(1);
+        table_manager.add_column("day", DataType::Integer);
+
+        let record_id = table_manager
+            .insert_record(vec![Value::Integer(29)])
+            .expect("Failed to insert a row");
+
+        let record = table_manager
+            .get_record(record_id)
+            .expect("Failed to retrive record by interal record id");
+
+        assert_eq!(vec![Some(Value::Integer(29))], record);
     }
 }

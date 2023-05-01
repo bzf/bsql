@@ -55,14 +55,30 @@ impl TableManager {
         self.next_column_id += 1;
     }
 
-    pub fn insert_record(&mut self, values: Vec<Value>) -> bool {
+    pub fn insert_record(&mut self, values: Vec<Value>) -> Option<u64> {
         // Check that we have the same amount of `values` as we have `column_definitions`.
         if values.len() != self.column_definitions.len() {
-            return false;
+            return None;
         }
 
-        let mut active_table_page = self.get_writable_page().write().unwrap();
-        return active_table_page.insert_record(values.clone()).is_some();
+        let (page_index, writable_page) = self.get_writable_page();
+        let mut active_table_page = writable_page.write().ok()?;
+
+        let record_slot = active_table_page.insert_record(values.clone())?;
+
+        Some((page_index << 32) as u64 | record_slot as u64)
+    }
+
+    pub fn get_record(&self, record_id: u64) -> Option<Vec<Option<Value>>> {
+        let page_index = (record_id >> 32) & 0xFFFF_FFFF;
+        let record_slot = record_id & 0xFFFF_FFFF;
+
+        let page = self.pages.get(page_index as usize)?.read().ok()?;
+        let page_columns = page.column_definitions();
+
+        return page
+            .get_record(record_slot as u8)
+            .map(|record| self.normalize_page_record(&page_columns, record));
     }
 
     pub fn get_records(&self) -> Vec<Vec<Option<Value>>> {
@@ -76,28 +92,8 @@ impl TableManager {
 
             // For every column that we want to return (all might not exist), figure out how to
             // transform the order of the record we retrieved into what we expect.
-            let value_index_order: Vec<Option<ColumnId>> = self
-                .column_definitions
-                .iter()
-                .map(|expected_column| {
-                    page_columns
-                        .iter()
-                        .find(|page_column| expected_column.column_id() == page_column.column_id())
-                        .map(|page_column| page_column.column_id())
-                })
-                .collect();
-
             for page_record in page_records.into_iter() {
-                let normalized_record: Vec<Option<Value>> = value_index_order
-                    .clone()
-                    .into_iter()
-                    .map(|value_index| {
-                        value_index
-                            .and_then(|index| page_record.get(index as usize).map(|i| i.clone()))
-                    })
-                    .collect();
-
-                records.push(normalized_record);
+                records.push(self.normalize_page_record(page_columns, page_record));
             }
         }
 
@@ -132,7 +128,7 @@ impl TableManager {
         return Some(sorted_records);
     }
 
-    fn get_writable_page(&mut self) -> &LockedTablePage {
+    fn get_writable_page(&mut self) -> (usize, &LockedTablePage) {
         let column_ids: Vec<ColumnId> = self
             .column_definitions
             .iter()
@@ -166,7 +162,41 @@ impl TableManager {
             page_vec.push(next_table_page);
         }
 
-        return page_vec.last_mut().unwrap();
+        let page_index = page_vec
+            .iter()
+            .position(|i| Rc::ptr_eq(i, page_vec.last().unwrap()))
+            .unwrap();
+
+        return (page_index, page_vec.last_mut().unwrap());
+    }
+
+    // Takes a `Vec<Value>` and transforms it into a `Vec<Option<Value>>` where any missing columns
+    // in the input gets casted to `None`.
+    fn normalize_page_record(
+        &self,
+        page_columns: &Vec<ColumnDefinition>,
+        page_record: Vec<Value>,
+    ) -> Vec<Option<Value>> {
+        // For every column that we want to return (all might not exist), figure out how to
+        // transform the order of the record we retrieved into what we expect.
+        let value_index_order: Vec<Option<ColumnId>> = self
+            .column_definitions
+            .iter()
+            .map(|expected_column| {
+                page_columns
+                    .iter()
+                    .find(|page_column| expected_column.column_id() == page_column.column_id())
+                    .map(|page_column| page_column.column_id())
+            })
+            .collect();
+
+        return value_index_order
+            .clone()
+            .into_iter()
+            .map(|value_index| {
+                value_index.and_then(|index| page_record.get(index as usize).map(|i| i.clone()))
+            })
+            .collect();
     }
 }
 
@@ -178,10 +208,14 @@ mod tests {
     fn get_records_for_pages_with_different_columns() {
         let mut table_manager = TableManager::new(1);
         table_manager.add_column("day", DataType::Integer);
-        assert!(table_manager.insert_record(vec![Value::Integer(31)]));
+        assert!(table_manager
+            .insert_record(vec![Value::Integer(31)])
+            .is_some());
 
         table_manager.add_column("month", DataType::Integer);
-        assert!(table_manager.insert_record(vec![Value::Integer(1), Value::Integer(5)]));
+        assert!(table_manager
+            .insert_record(vec![Value::Integer(1), Value::Integer(5)])
+            .is_some());
 
         // Returns records for the _current_ columns. Order is not guaranteed.
         let records = table_manager.get_records();
@@ -199,10 +233,14 @@ mod tests {
     fn test_get_records_with_specific_columns() {
         let mut table_manager = TableManager::new(1);
         table_manager.add_column("day", DataType::Integer);
-        assert!(table_manager.insert_record(vec![Value::Integer(13)]));
+        assert!(table_manager
+            .insert_record(vec![Value::Integer(13)])
+            .is_some());
 
         table_manager.add_column("month", DataType::Integer);
-        assert!(table_manager.insert_record(vec![Value::Integer(2), Value::Integer(4)]));
+        assert!(table_manager
+            .insert_record(vec![Value::Integer(2), Value::Integer(4)])
+            .is_some());
 
         // Returns records for the _given_ columns. Order is not guaranteed.
         let records = table_manager
