@@ -130,7 +130,6 @@ fn parse_insert_command(mut tokens: Vec<Token>) -> Option<Command> {
 
     tokens.reverse(); // Return the list back to the input order
     let mut tokens = tokens.into_iter().peekable();
-    println!("parse_insert_command: {:?}", tokens);
 
     let mut literal_values: Vec<LiteralValue> = vec![];
 

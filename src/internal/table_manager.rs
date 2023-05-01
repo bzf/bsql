@@ -71,7 +71,6 @@ impl TableManager {
                     .clone()
                     .into_iter()
                     .map(|value_index| {
-                        println!("getting value at index {:?}", value_index);
                         value_index
                             .and_then(|index| page_record.get(index as usize).map(|i| i.clone()))
                     })
