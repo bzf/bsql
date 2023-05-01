@@ -110,52 +110,20 @@ impl Database {
         };
     }
 
-    pub fn select_columns(
+    pub fn select_columns_by_name(
         &self,
         table_name: &str,
-        columns: Vec<&str>,
+        column_names: Vec<&str>,
     ) -> Option<Vec<Vec<Option<Value>>>> {
         let Some(table_id) = self.table_names.get(table_name) else {
             return None;
         };
 
-        let Some(table_schema) = self.table_definitions.get(table_id) else {
+        let Some(table_manager) = self.tables.get(table_id) else {
             return None;
         };
 
-        let definitions = table_schema.column_definitions();
-
-        let selected_definitions: Vec<&ColumnDefinition> = columns
-            .iter()
-            .flat_map(|name| definitions.iter().find(|(key, _)| key == name))
-            .map(|(_, definition)| definition)
-            .collect();
-
-        if selected_definitions.len() != columns.len() {
-            // Invalid columns
-            return None;
-        }
-
-        let column_indices: Vec<u8> = selected_definitions.iter().map(|d| d.column_id()).collect();
-
-        if let Some(table_store) = self.table_stores.get(table_id) {
-            return Some(
-                table_store
-                    .all_records()
-                    .into_iter()
-                    .map(|row| {
-                        column_indices
-                            .iter()
-                            .map(|index| row.get(*index as usize).unwrap())
-                            .cloned()
-                            .map(|value| Some(value))
-                            .collect()
-                    })
-                    .collect(),
-            );
-        } else {
-            return Some(vec![]);
-        };
+        return table_manager.get_records_for_columns(&column_names);
     }
 
     fn table_exists(&self, table_name: &str) -> bool {
@@ -289,7 +257,7 @@ mod tests {
         assert!(database.insert_row(table_name, vec![Value::Integer(5), Value::Integer(3)]));
 
         let result = database
-            .select_columns(table_name, vec!["birthday"])
+            .select_columns_by_name(table_name, vec!["birthday"])
             .expect("Failed to select from database");
 
         assert_eq!(vec![vec![Some(Value::Integer(3))]], result);
@@ -303,7 +271,7 @@ mod tests {
         assert!(database.add_column(table_name, "age", DataType::Integer));
         assert!(database.insert_row(table_name, vec![Value::Integer(5)]));
 
-        let result = database.select_columns(table_name, vec!["lol123"]);
+        let result = database.select_columns_by_name(table_name, vec!["lol123"]);
 
         assert_eq!(None, result);
     }

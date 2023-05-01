@@ -83,6 +83,34 @@ impl TableManager {
         return records;
     }
 
+    pub fn get_records_for_columns(
+        &self,
+        column_names: &Vec<&str>,
+    ) -> Option<Vec<Vec<Option<Value>>>> {
+        let sorted_column_indices: Vec<ColumnId> = column_names
+            .iter()
+            .map(|column_name| self.column_names.get(&**column_name))
+            .flat_map(|i| i.map(|t| *t))
+            .collect();
+
+        if sorted_column_indices.len() != column_names.len() {
+            return None;
+        }
+
+        let sorted_records = self
+            .get_records()
+            .into_iter()
+            .map(|row| {
+                return sorted_column_indices
+                    .iter()
+                    .map(|column_index| row.get(*column_index as usize).unwrap().clone())
+                    .collect();
+            })
+            .collect();
+
+        return Some(sorted_records);
+    }
+
     fn get_writable_page(&mut self) -> &mut TablePage {
         let column_ids: Vec<ColumnId> = self
             .column_definitions
@@ -130,5 +158,40 @@ mod tests {
             records.contains(&vec![Some(Value::Integer(1)), Some(Value::Integer(5))]),
             "Missing record both column"
         );
+    }
+
+    #[test]
+    fn test_get_records_with_specific_columns() {
+        let mut table_manager = TableManager::new(1);
+        table_manager.add_column("day", DataType::Integer);
+        assert!(table_manager.insert_record(vec![Value::Integer(13)]));
+
+        table_manager.add_column("month", DataType::Integer);
+        assert!(table_manager.insert_record(vec![Value::Integer(2), Value::Integer(4)]));
+
+        // Returns records for the _given_ columns. Order is not guaranteed.
+        let records = table_manager
+            .get_records_for_columns(&vec!["month", "day"])
+            .expect("Failed to get the result");
+
+        assert!(
+            records.contains(&vec![None, Some(Value::Integer(13))]),
+            "Missing record with only first column"
+        );
+        assert!(
+            records.contains(&vec![Some(Value::Integer(4)), Some(Value::Integer(2))]),
+            "Missing record both column"
+        );
+    }
+
+    #[test]
+    fn test_get_records_with_specific_columns_with_invalid_columns() {
+        let mut table_manager = TableManager::new(1);
+        table_manager.add_column("day", DataType::Integer);
+
+        assert_eq!(
+            None,
+            table_manager.get_records_for_columns(&vec!["month", "day"])
+        )
     }
 }

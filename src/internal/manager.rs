@@ -117,7 +117,7 @@ impl Manager {
             return None;
         };
 
-        return database.select_columns(
+        return database.select_columns_by_name(
             table_name,
             columns.iter().map(|i| i.as_str()).collect::<Vec<&str>>(),
         );
