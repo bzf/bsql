@@ -1,15 +1,16 @@
-use std::{collections::HashMap, sync::RwLock};
+use std::{collections::HashMap, rc::Rc, sync::RwLock};
 
 use super::{ColumnDefinition, DataType, TablePage, Value};
 
 type ColumnId = u8;
 
-type LockedTablePage = RwLock<TablePage>;
+type LockedTablePage = Rc<RwLock<TablePage>>;
 
 pub struct TableManager {
     table_id: u64,
     next_column_id: ColumnId,
 
+    pages: Vec<LockedTablePage>,
     column_pages: HashMap<Vec<ColumnId>, Vec<LockedTablePage>>,
 
     column_names: HashMap<String, ColumnId>,
@@ -25,6 +26,7 @@ impl TableManager {
             column_names: HashMap::new(),
             column_definitions: Vec::new(),
 
+            pages: Vec::new(),
             column_pages: HashMap::new(),
         }
     }
@@ -150,11 +152,18 @@ impl TableManager {
             };
 
             if is_page_full {
-                page_vec.push(RwLock::new(TablePage::new(self.column_definitions.clone())));
+                let next_table_page =
+                    Rc::new(RwLock::new(TablePage::new(self.column_definitions.clone())));
+
+                self.pages.push(next_table_page.clone());
+                page_vec.push(next_table_page);
             }
         } else {
-            let next_table_page = TablePage::new(self.column_definitions.clone());
-            page_vec.push(RwLock::new(next_table_page));
+            let next_table_page =
+                Rc::new(RwLock::new(TablePage::new(self.column_definitions.clone())));
+
+            self.pages.push(next_table_page.clone());
+            page_vec.push(next_table_page);
         }
 
         return page_vec.last_mut().unwrap();
