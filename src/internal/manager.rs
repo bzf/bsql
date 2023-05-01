@@ -95,7 +95,11 @@ impl Manager {
         }
     }
 
-    pub fn select_all(&self, database_name: &str, table_name: &str) -> Option<Vec<Vec<Value>>> {
+    pub fn select_all(
+        &self,
+        database_name: &str,
+        table_name: &str,
+    ) -> Option<Vec<Vec<Option<Value>>>> {
         let Some(database) = self.database_definitions.get(database_name) else {
             return None;
         };
@@ -108,7 +112,7 @@ impl Manager {
         database_name: &str,
         table_name: &str,
         columns: Vec<String>,
-    ) -> Option<Vec<Vec<Value>>> {
+    ) -> Option<Vec<Vec<Option<Value>>>> {
         let Some(database) = self.database_definitions.get(database_name) else {
             return None;
         };

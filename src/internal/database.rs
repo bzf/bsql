@@ -98,19 +98,23 @@ impl Database {
         table_store.insert_record(values.clone()).is_some() && table_manager.insert_record(values)
     }
 
-    pub fn select_all_columns(&self, table_name: &str) -> Option<Vec<Vec<Value>>> {
+    pub fn select_all_columns(&self, table_name: &str) -> Option<Vec<Vec<Option<Value>>>> {
         let Some(table_id) = self.table_names.get(table_name) else {
             return None;
         };
 
-        if let Some(table_store) = self.table_stores.get(table_id) {
-            return Some(table_store.all_records());
+        if let Some(table_manager) = self.tables.get(table_id) {
+            return Some(table_manager.get_records());
         } else {
             return Some(vec![]);
         };
     }
 
-    pub fn select_columns(&self, table_name: &str, columns: Vec<&str>) -> Option<Vec<Vec<Value>>> {
+    pub fn select_columns(
+        &self,
+        table_name: &str,
+        columns: Vec<&str>,
+    ) -> Option<Vec<Vec<Option<Value>>>> {
         let Some(table_id) = self.table_names.get(table_name) else {
             return None;
         };
@@ -144,6 +148,7 @@ impl Database {
                             .iter()
                             .map(|index| row.get(*index as usize).unwrap())
                             .cloned()
+                            .map(|value| Some(value))
                             .collect()
                     })
                     .collect(),
@@ -238,7 +243,27 @@ mod tests {
             .select_all_columns(table_name)
             .expect("Failed to select from database");
 
-        assert_eq!(vec![vec![Value::Integer(5)]], result);
+        assert_eq!(vec![vec![Some(Value::Integer(5))]], result);
+    }
+
+    #[test]
+    fn select_all_from_table_with_different_columns_over_time() {
+        let mut database = Database::new();
+        let table_name = "new_table";
+        assert!(database.create_table(table_name).is_some());
+        assert!(database.add_column(table_name, "age", DataType::Integer));
+        assert!(database.insert_row(table_name, vec![Value::Integer(1)]));
+
+        assert!(database.add_column(table_name, "month", DataType::Integer));
+        assert!(database.insert_row(table_name, vec![Value::Integer(2), Value::Integer(3)]));
+
+        // Order is not guaranteed
+        let result = database
+            .select_all_columns(table_name)
+            .expect("Failed to select from database");
+
+        assert!(result.contains(&vec![Some(Value::Integer(1)), None]));
+        assert!(result.contains(&vec![Some(Value::Integer(1)), None]));
     }
 
     #[test]
@@ -267,7 +292,7 @@ mod tests {
             .select_columns(table_name, vec!["birthday"])
             .expect("Failed to select from database");
 
-        assert_eq!(vec![vec![Value::Integer(3)]], result);
+        assert_eq!(vec![vec![Some(Value::Integer(3))]], result);
     }
 
     #[test]

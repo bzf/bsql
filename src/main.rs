@@ -133,7 +133,13 @@ fn main() {
                                     records
                                         .into_iter()
                                         .map(|row| {
-                                            row.into_iter().map(|value| value.to_string()).collect()
+                                            row.into_iter()
+                                                .map(|value| {
+                                                    value
+                                                        .map(|v| v.to_string())
+                                                        .unwrap_or("NULL".to_string())
+                                                })
+                                                .collect()
                                         })
                                         .collect(),
                                 );
@@ -160,7 +166,13 @@ fn main() {
                                     records
                                         .into_iter()
                                         .map(|row| {
-                                            row.into_iter().map(|value| value.to_string()).collect()
+                                            row.into_iter()
+                                                .map(|value| {
+                                                    value
+                                                        .map(|v| v.to_string())
+                                                        .unwrap_or("NULL".to_string())
+                                                })
+                                                .collect()
                                         })
                                         .collect(),
                                 );
