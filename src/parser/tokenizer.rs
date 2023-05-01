@@ -18,8 +18,10 @@ pub enum Token {
     NotKeyword,
     NullKeyword,
     IntegerKeyword,
+    WhereKeyword,
 
     Asterisk,
+    EqualSign,
 
     Identifier(String),
     NumericLiteral(String),
@@ -49,6 +51,9 @@ pub fn tokenize(input: &str) -> Vec<Token> {
         } else if character == '*' {
             tokens.push(Token::Asterisk);
             continue;
+        } else if character == '=' {
+            tokens.push(Token::EqualSign);
+            continue;
         }
 
         let mut token = String::from(character);
@@ -73,6 +78,7 @@ pub fn tokenize(input: &str) -> Vec<Token> {
             "TABLE" => tokens.push(Token::TableKeyword),
             "DATABASE" => tokens.push(Token::DatabaseKeyword),
 
+            "WHERE" => tokens.push(Token::WhereKeyword),
             "FROM" => tokens.push(Token::FromKeyword),
             "VALUES" => tokens.push(Token::ValuesKeyword),
             "INTO" => tokens.push(Token::IntoKeyword),
@@ -100,7 +106,7 @@ mod tests {
 
     #[test]
     fn test_tokenizing_special_characters() {
-        assert_eq!(vec![Token::Asterisk,], tokenize("*"),)
+        assert_eq!(vec![Token::Asterisk, Token::EqualSign], tokenize("*="),)
     }
 
     #[test]
@@ -183,6 +189,24 @@ mod tests {
                 Token::Semicolon
             ],
             tokenize("SELECT * FROM users;"),
+        )
+    }
+
+    #[test]
+    fn test_tokenizing_select_column_where_input() {
+        assert_eq!(
+            vec![
+                Token::SelectKeyword,
+                Token::Asterisk,
+                Token::FromKeyword,
+                Token::Identifier("users".to_string()),
+                Token::WhereKeyword,
+                Token::Identifier("user_id".to_string()),
+                Token::EqualSign,
+                Token::NumericLiteral("2".to_string()),
+                Token::Semicolon
+            ],
+            tokenize("SELECT * FROM users WHERE user_id = 2;"),
         )
     }
 }
