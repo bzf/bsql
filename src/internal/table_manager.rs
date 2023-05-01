@@ -46,6 +46,44 @@ impl TableManager {
         return active_table_page.insert_record(values.clone()).is_some();
     }
 
+    pub fn get_records(&self) -> Vec<Vec<Option<Value>>> {
+        let mut records: Vec<Vec<Option<Value>>> = Vec::new();
+
+        for page in self.pages.values().flatten() {
+            let page_columns = page.column_definitions();
+            let page_records = page.get_records();
+
+            // For every column that we want to return (all might not exist), figure out how to
+            // transform the order of the record we retrieved into what we expect.
+            let value_index_order: Vec<Option<ColumnId>> = self
+                .column_definitions
+                .iter()
+                .map(|expected_column| {
+                    page_columns
+                        .iter()
+                        .find(|page_column| expected_column.column_id() == page_column.column_id())
+                        .map(|page_column| page_column.column_id())
+                })
+                .collect();
+
+            for page_record in page_records.into_iter() {
+                let normalized_record: Vec<Option<Value>> = value_index_order
+                    .clone()
+                    .into_iter()
+                    .map(|value_index| {
+                        println!("getting value at index {:?}", value_index);
+                        value_index
+                            .and_then(|index| page_record.get(index as usize).map(|i| i.clone()))
+                    })
+                    .collect();
+
+                records.push(normalized_record);
+            }
+        }
+
+        return records;
+    }
+
     fn get_writable_page(&mut self) -> &mut TablePage {
         let column_ids: Vec<ColumnId> = self
             .column_definitions
@@ -67,5 +105,31 @@ impl TableManager {
         }
 
         return page_vec.last_mut().unwrap();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn get_records_for_pages_with_different_columns() {
+        let mut table_manager = TableManager::new(1);
+        table_manager.add_column("day", DataType::Integer);
+        assert!(table_manager.insert_record(vec![Value::Integer(31)]));
+
+        table_manager.add_column("month", DataType::Integer);
+        assert!(table_manager.insert_record(vec![Value::Integer(1), Value::Integer(5)]));
+
+        // Returns records for the _current_ columns. Order is not guaranteed.
+        let records = table_manager.get_records();
+        assert!(
+            records.contains(&vec![Some(Value::Integer(31)), None]),
+            "Missing record with only first column"
+        );
+        assert!(
+            records.contains(&vec![Some(Value::Integer(1)), Some(Value::Integer(5))]),
+            "Missing record both column"
+        );
     }
 }

@@ -1,5 +1,6 @@
 use std::{collections::HashSet, ops::Range};
 
+#[derive(Debug)]
 pub struct RangeSet {
     available: HashSet<u8>,
     used: HashSet<u8>,
@@ -38,6 +39,10 @@ impl RangeSet {
         } else {
             return false;
         }
+    }
+
+    pub fn keys(&self) -> Vec<u8> {
+        self.used.iter().cloned().collect()
     }
 
     pub fn remove(&mut self, value: u8) {

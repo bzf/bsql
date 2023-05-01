@@ -54,6 +54,16 @@ impl TablePage {
         Some(record_index)
     }
 
+    pub fn get_records(&self) -> Vec<Vec<Value>> {
+        let mut records = Vec::with_capacity(self.record_count());
+
+        for record_index in self.slots_index.keys() {
+            records.push(self.get_record(record_index).unwrap());
+        }
+
+        return records;
+    }
+
     pub fn get_record(&self, record_index: u8) -> Option<Vec<Value>> {
         // Check if we have a record on that slot.
         if !self.slots_index.contains(record_index) {
@@ -84,6 +94,10 @@ impl TablePage {
 
     pub fn delete_record(&mut self, record_index: u8) {
         self.slots_index.remove(record_index);
+    }
+
+    pub fn column_definitions(&self) -> &Vec<ColumnDefinition> {
+        &self.column_definitions
     }
 
     pub fn serialize_page_header(&self) -> Vec<u8> {
