@@ -1,14 +1,12 @@
 use std::collections::HashMap;
 
-use super::{ColumnDefinition, DataType, TableManager, TableSchema, TableStore, Value};
+use super::{ColumnDefinition, DataType, TableManager, Value};
 
 type TableId = u64;
 
 pub struct Database {
     table_names: HashMap<String, TableId>,
     tables: HashMap<TableId, TableManager>,
-    table_definitions: HashMap<TableId, TableSchema>,
-    table_stores: HashMap<TableId, TableStore>,
 
     next_table_id: TableId,
 }
@@ -16,12 +14,9 @@ pub struct Database {
 impl Database {
     pub fn new() -> Self {
         Self {
-            table_definitions: HashMap::new(),
             tables: HashMap::new(),
 
             table_names: HashMap::new(),
-            table_stores: HashMap::new(),
-
             next_table_id: 0,
         }
     }
@@ -46,8 +41,6 @@ impl Database {
             self.next_table_id += 1;
 
             self.table_names.insert(table_name.to_string(), table_id);
-            self.table_definitions.insert(table_id, TableSchema::new());
-
             self.tables.insert(table_id, TableManager::new(table_id));
 
             Some(table_id)
@@ -61,15 +54,10 @@ impl Database {
             return false;
         };
 
-        let Some(table_schema) = self.table_definitions.get_mut(table_id) else {
-            return false;
-        };
-
         let Some(table_manager) = self.tables.get_mut(table_id) else {
             return false;
         };
 
-        table_schema.add_column(column_name, data_type.clone());
         table_manager.add_column(column_name, data_type);
 
         return true;
@@ -80,24 +68,15 @@ impl Database {
             return false;
         };
 
-        let Some(table_schema) = self.table_definitions.get(table_id) else {
-            return false;
-        };
-
         let Some(table_manager) = self.tables.get_mut(table_id) else {
             return false;
         };
 
-        if values.len() != table_schema.column_definitions_len() {
+        if values.len() != table_manager.column_definitions().len() {
             return false;
         }
 
-        let table_store = self
-            .table_stores
-            .entry(*table_id)
-            .or_insert(TableStore::new());
-
-        table_store.insert_record(values.clone()).is_some() && table_manager.insert_record(values)
+        table_manager.insert_record(values)
     }
 
     pub fn select_all_columns(&self, table_name: &str) -> Option<Vec<Vec<Option<Value>>>> {
