@@ -6,7 +6,7 @@ type TableId = u64;
 
 pub struct Database {
     table_names: HashMap<String, TableId>,
-    tables: HashMap<TableId, TableManager>,
+    table_managers: HashMap<TableId, TableManager>,
 
     next_table_id: TableId,
 }
@@ -14,7 +14,7 @@ pub struct Database {
 impl Database {
     pub fn new() -> Self {
         Self {
-            tables: HashMap::new(),
+            table_managers: HashMap::new(),
 
             table_names: HashMap::new(),
             next_table_id: 0,
@@ -30,7 +30,7 @@ impl Database {
             return None;
         };
 
-        self.tables
+        self.table_managers
             .get(table_id)
             .map(|table_manager| table_manager.column_definitions())
     }
@@ -41,7 +41,8 @@ impl Database {
             self.next_table_id += 1;
 
             self.table_names.insert(table_name.to_string(), table_id);
-            self.tables.insert(table_id, TableManager::new(table_id));
+            self.table_managers
+                .insert(table_id, TableManager::new(table_id));
 
             Some(table_id)
         } else {
@@ -54,7 +55,7 @@ impl Database {
             return false;
         };
 
-        let Some(table_manager) = self.tables.get_mut(table_id) else {
+        let Some(table_manager) = self.table_managers.get_mut(table_id) else {
             return false;
         };
 
@@ -68,7 +69,7 @@ impl Database {
             return false;
         };
 
-        let Some(table_manager) = self.tables.get_mut(table_id) else {
+        let Some(table_manager) = self.table_managers.get_mut(table_id) else {
             return false;
         };
 
@@ -84,7 +85,7 @@ impl Database {
             return None;
         };
 
-        if let Some(table_manager) = self.tables.get(table_id) {
+        if let Some(table_manager) = self.table_managers.get(table_id) {
             return Some(table_manager.get_records());
         } else {
             return Some(vec![]);
@@ -100,7 +101,7 @@ impl Database {
             return None;
         };
 
-        let Some(table_manager) = self.tables.get(table_id) else {
+        let Some(table_manager) = self.table_managers.get(table_id) else {
             return None;
         };
 
