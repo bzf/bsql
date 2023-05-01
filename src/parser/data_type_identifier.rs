@@ -1,3 +1,5 @@
+use crate::internal::DataType;
+
 use super::tokenizer::Token;
 
 #[derive(Debug, PartialEq)]
@@ -10,6 +12,14 @@ impl From<Token> for Option<DataTypeIdentifier> {
         match value {
             Token::IntegerKeyword => Some(DataTypeIdentifier::Integer),
             _ => None,
+        }
+    }
+}
+
+impl Into<DataType> for DataTypeIdentifier {
+    fn into(self) -> DataType {
+        match self {
+            DataTypeIdentifier::Integer => DataType::Integer,
         }
     }
 }

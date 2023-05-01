@@ -75,13 +75,25 @@ fn main() {
                         database_manager.create_database(&database_name);
                     }
 
-                    Some(Command::CreateTable { table_name, .. }) => {
+                    Some(Command::CreateTable {
+                        table_name,
+                        column_definitions,
+                    }) => {
                         let Some(ref database_name) = active_database else {
                             println!("No active database selected.");
                             continue;
                         };
 
                         if database_manager.create_table(database_name, &table_name) {
+                            for column in column_definitions {
+                                database_manager.add_column(
+                                    database_name,
+                                    &table_name,
+                                    &column.0,
+                                    column.1.into(),
+                                );
+                            }
+
                             println!("CREATE TABLE");
                         } else {
                             println!("ERROR: Table \"{}\" already exists.", database_name);
