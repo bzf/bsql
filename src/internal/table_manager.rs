@@ -1,14 +1,16 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::RwLock};
 
 use super::{ColumnDefinition, DataType, TablePage, Value};
 
 type ColumnId = u8;
 
+type LockedTablePage = RwLock<TablePage>;
+
 pub struct TableManager {
     table_id: u64,
     next_column_id: ColumnId,
 
-    pages: HashMap<Vec<ColumnId>, Vec<TablePage>>,
+    pages: HashMap<Vec<ColumnId>, Vec<LockedTablePage>>,
 
     column_names: HashMap<String, ColumnId>,
     column_definitions: Vec<ColumnDefinition>,
@@ -57,14 +59,16 @@ impl TableManager {
             return false;
         }
 
-        let active_table_page = self.get_writable_page();
+        let mut active_table_page = self.get_writable_page().write().unwrap();
         return active_table_page.insert_record(values.clone()).is_some();
     }
 
     pub fn get_records(&self) -> Vec<Vec<Option<Value>>> {
         let mut records: Vec<Vec<Option<Value>>> = Vec::new();
 
-        for page in self.pages.values().flatten() {
+        for locked_page in self.pages.values().flatten() {
+            let page = locked_page.read().unwrap();
+
             let page_columns = page.column_definitions();
             let page_records = page.get_records();
 
@@ -126,24 +130,31 @@ impl TableManager {
         return Some(sorted_records);
     }
 
-    fn get_writable_page(&mut self) -> &mut TablePage {
+    fn get_writable_page(&mut self) -> &LockedTablePage {
         let column_ids: Vec<ColumnId> = self
             .column_definitions
             .iter()
             .map(|c| c.column_id())
             .collect();
 
-        let page_vec: &mut Vec<TablePage> = self.pages.entry(column_ids).or_insert(Vec::new());
+        let page_vec: &mut Vec<LockedTablePage> =
+            self.pages.entry(column_ids).or_insert(Vec::new());
 
         // Check if the last page, if any, is full and if so create a new one.
         // If there are no pages, create one.
-        if let Some(last_table_page) = page_vec.last_mut() {
-            if last_table_page.is_full() {
-                page_vec.push(TablePage::new(self.column_definitions.clone()));
+        let last_table_page_locked = page_vec.last_mut();
+        if let Some(last_table_page_locked) = last_table_page_locked {
+            let is_page_full = {
+                let last_table_page = last_table_page_locked.write().unwrap();
+                last_table_page.is_full()
+            };
+
+            if is_page_full {
+                page_vec.push(RwLock::new(TablePage::new(self.column_definitions.clone())));
             }
         } else {
             let next_table_page = TablePage::new(self.column_definitions.clone());
-            page_vec.push(next_table_page);
+            page_vec.push(RwLock::new(next_table_page));
         }
 
         return page_vec.last_mut().unwrap();
