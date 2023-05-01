@@ -12,6 +12,7 @@ mod value;
 use database::Database;
 use range_set::RangeSet;
 use table_manager::TableManager;
+use table_page::TablePage;
 use table_schema::TableSchema;
 use table_store::TableStore;
 

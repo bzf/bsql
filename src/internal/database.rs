@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use super::{ColumnDefinition, DataType, TableManager, TableSchema, TableStore, Value};
+use super::{ColumnDefinition, DataType, TableManager, TablePage, TableSchema, TableStore, Value};
 
 type TableId = u64;
 
@@ -44,8 +44,9 @@ impl Database {
             self.next_table_id += 1;
 
             self.table_names.insert(table_name.to_string(), table_id);
-            self.tables.insert(table_id, TableManager::new(table_id));
             self.table_definitions.insert(table_id, TableSchema::new());
+
+            self.tables.insert(table_id, TableManager::new(table_id));
 
             Some(table_id)
         } else {
@@ -81,6 +82,10 @@ impl Database {
             return false;
         };
 
+        let Some(table_manager) = self.tables.get_mut(table_id) else {
+            return false;
+        };
+
         if values.len() != table_schema.column_definitions_len() {
             return false;
         }
@@ -90,7 +95,7 @@ impl Database {
             .entry(*table_id)
             .or_insert(TableStore::new());
 
-        table_store.insert_record(values).is_some()
+        table_store.insert_record(values.clone()).is_some() && table_manager.insert_record(values)
     }
 
     pub fn select_all_columns(&self, table_name: &str) -> Option<Vec<Vec<Value>>> {

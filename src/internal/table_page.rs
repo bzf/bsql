@@ -14,6 +14,7 @@ pub struct TablePage {
     // TODO: Maybe this could be a set of available upcoming indexes? When deleting something we
     // can mark it as available in the `TableIndex` and remove it from the set.
     slots_index: RangeSet,
+
     // next_record_index: u8,
     /// The `data_page` holds the serialized version of all records.
     data_page: Vec<u8>,
@@ -24,7 +25,6 @@ impl TablePage {
         Self {
             column_definitions,
             slots_index: RangeSet::new(0..255),
-            // next_record_index: 0,
             data_page: vec![0; 4096],
         }
     }
@@ -98,6 +98,10 @@ impl TablePage {
             });
 
         return page_header;
+    }
+
+    pub fn is_full(&self) -> bool {
+        self.slots_index.is_full()
     }
 
     fn record_count(&self) -> usize {
