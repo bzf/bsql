@@ -2,7 +2,7 @@ mod data_type_identifier;
 mod literal_value;
 mod tokenizer;
 
-use super::Error;
+use crate::Error;
 use literal_value::LiteralValue;
 
 pub use data_type_identifier::DataTypeIdentifier;

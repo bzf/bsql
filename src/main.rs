@@ -1,15 +1,11 @@
 use std::io::Write;
 
-use crate::parser::Command;
-
 mod error;
 mod internal;
-mod parser;
 mod print_table;
 
 use error::Error;
-use internal::ColumnDefinition;
-use parser::Token;
+use internal::{parse, ColumnDefinition, Command, Token};
 use print_table::{print_query_result, print_table};
 
 fn main() {
@@ -71,7 +67,7 @@ fn main() {
             }
 
             _ => {
-                let command = parser::parse(&expression);
+                let command = parse(&expression);
 
                 match command {
                     Ok(Command::CreateDatabase { database_name }) => {
