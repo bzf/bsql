@@ -1,17 +1,17 @@
 use super::Value;
 
-pub type RowResult = Vec<Option<Value>>;
+pub type RowValues = Vec<Option<Value>>;
 
 #[derive(Debug, PartialEq)]
-pub struct QueryResult {
+pub struct RowResult {
     count: usize,
 
     columns: Vec<String>,
-    rows: Vec<RowResult>,
+    rows: Vec<RowValues>,
 }
 
-impl QueryResult {
-    pub fn new(columns: Vec<String>, rows: Vec<RowResult>) -> Self {
+impl RowResult {
+    pub fn new(columns: Vec<String>, rows: Vec<RowValues>) -> Self {
         Self {
             count: rows.len(),
 
@@ -24,7 +24,7 @@ impl QueryResult {
         &self.columns
     }
 
-    pub fn rows(&self) -> &[RowResult] {
+    pub fn rows(&self) -> &[RowValues] {
         &self.rows
     }
 

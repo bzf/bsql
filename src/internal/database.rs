@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use super::{ColumnDefinition, DataType, QueryResult, TableManager, Value};
+use super::{ColumnDefinition, DataType, RowResult, TableManager, Value};
 
 type TableId = u64;
 
@@ -80,7 +80,7 @@ impl Database {
         table_manager.insert_record(values).is_some()
     }
 
-    pub fn select_all_columns(&self, table_name: &str) -> Option<QueryResult> {
+    pub fn select_all_columns(&self, table_name: &str) -> Option<RowResult> {
         let Some(table_id) = self.table_names.get(table_name) else {
             return None;
         };
@@ -92,7 +92,7 @@ impl Database {
         &self,
         table_name: &str,
         column_names: Vec<&str>,
-    ) -> Option<QueryResult> {
+    ) -> Option<RowResult> {
         let Some(table_id) = self.table_names.get(table_name) else {
             return None;
         };

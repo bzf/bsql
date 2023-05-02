@@ -1,6 +1,6 @@
 use std::{collections::HashMap, rc::Rc, sync::RwLock};
 
-use super::{ColumnDefinition, DataType, QueryResult, TablePage, Value};
+use super::{ColumnDefinition, DataType, RowResult, TablePage, Value};
 
 type ColumnId = u8;
 
@@ -69,7 +69,7 @@ impl TableManager {
         Some((page_index << 32) as u64 | record_slot as u64)
     }
 
-    pub fn get_record(&self, record_id: u64) -> Option<QueryResult> {
+    pub fn get_record(&self, record_id: u64) -> Option<RowResult> {
         let page_index = (record_id >> 32) & 0xFFFF_FFFF;
         let record_slot = record_id & 0xFFFF_FFFF;
 
@@ -80,13 +80,13 @@ impl TableManager {
             .get_record(record_slot as u8)
             .map(|record| self.normalize_page_record(&page_columns, record))?;
 
-        Some(QueryResult::new(
+        Some(RowResult::new(
             self.column_names.keys().cloned().collect(),
             vec![row_data],
         ))
     }
 
-    pub fn get_records(&self) -> QueryResult {
+    pub fn get_records(&self) -> RowResult {
         let mut rows: Vec<Vec<Option<Value>>> = Vec::new();
 
         for locked_page in self.column_pages.values().flatten() {
@@ -102,10 +102,10 @@ impl TableManager {
             }
         }
 
-        QueryResult::new(self.column_names.keys().cloned().collect(), rows)
+        RowResult::new(self.column_names.keys().cloned().collect(), rows)
     }
 
-    pub fn get_records_for_columns(&self, column_names: &Vec<&str>) -> Option<QueryResult> {
+    pub fn get_records_for_columns(&self, column_names: &Vec<&str>) -> Option<RowResult> {
         let sorted_column_indices: Vec<ColumnId> = column_names
             .iter()
             .map(|column_name| self.column_names.get(&**column_name))
@@ -128,7 +128,7 @@ impl TableManager {
             })
             .collect();
 
-        Some(QueryResult::new(
+        Some(RowResult::new(
             column_names.iter().map(|name| name.to_string()).collect(),
             sorted_rows,
         ))

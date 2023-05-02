@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use super::{ColumnDefinition, DataType, Database, QueryResult, Value};
+use super::{ColumnDefinition, DataType, Database, RowResult, Value};
 
 pub struct Manager {
     database_definitions: HashMap<String, Database>,
@@ -94,7 +94,7 @@ impl Manager {
         }
     }
 
-    pub fn select_all(&self, database_name: &str, table_name: &str) -> Option<QueryResult> {
+    pub fn select_all(&self, database_name: &str, table_name: &str) -> Option<RowResult> {
         let Some(database) = self.database_definitions.get(database_name) else {
             return None;
         };
@@ -107,7 +107,7 @@ impl Manager {
         database_name: &str,
         table_name: &str,
         columns: Vec<String>,
-    ) -> Option<QueryResult> {
+    ) -> Option<RowResult> {
         let Some(database) = self.database_definitions.get(database_name) else {
             return None;
         };
