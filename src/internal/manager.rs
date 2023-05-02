@@ -43,13 +43,14 @@ impl Manager {
         &mut self,
         database_name: &str,
         table_name: &str,
+        columns: Vec<(String, DataType)>,
     ) -> Result<QueryResult, Error> {
         let Some(database) = self.database_definitions.get_mut(database_name) else {
             return Err(Error::DatabaseDoesNotExist(database_name.to_string()));
         };
 
         database
-            .create_table(table_name)
+            .create_table(table_name, columns)
             .map(|_table_id| QueryResult::CommandSuccessMessage("CREATE TABLE".to_string()))
     }
 

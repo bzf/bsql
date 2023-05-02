@@ -10,5 +10,6 @@ pub enum Error {
     TableDoesNotExist(String),
     TableAlreadyExists(String),
     ColumnDoesNotExist(String),
+    ColumnAlreadyExist(String),
     InsertFailed,
 }

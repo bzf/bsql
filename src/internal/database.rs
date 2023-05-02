@@ -40,14 +40,22 @@ impl Database {
             .map(|table_manager| table_manager.column_definitions())
     }
 
-    pub fn create_table(&mut self, table_name: &str) -> Result<TableId, Error> {
+    pub fn create_table(
+        &mut self,
+        table_name: &str,
+        columns: Vec<(String, DataType)>,
+    ) -> Result<TableId, Error> {
         if !self.table_exists(table_name) {
             let table_id = self.next_table_id;
-            self.next_table_id += 1;
 
+            let mut table_manager = TableManager::new(table_id);
+            for (column_name, data_type) in columns.iter() {
+                table_manager.add_column(column_name, data_type.clone())?;
+            }
+
+            self.table_managers.insert(table_id, table_manager);
             self.table_names.insert(table_name.to_string(), table_id);
-            self.table_managers
-                .insert(table_id, TableManager::new(table_id));
+            self.next_table_id += 1;
 
             Ok(table_id)
         } else {
@@ -71,7 +79,7 @@ impl Database {
             .get_mut(table_id)
             .ok_or(Error::TableDoesNotExist(table_name.to_string()))?;
 
-        table_manager.add_column(column_name, data_type);
+        table_manager.add_column(column_name, data_type)?;
 
         return Ok("ALTER TABLE".to_string());
     }
@@ -134,7 +142,7 @@ mod tests {
     fn test_creating_new_table_without_columns() {
         let mut database = Database::new();
 
-        let result = database.create_table("foobar");
+        let result = database.create_table("foobar", vec![]);
 
         assert!(result.is_ok(), "Failed to create table");
     }
@@ -143,7 +151,8 @@ mod tests {
     fn test_creating_new_table_with_columns() {
         let mut database = Database::new();
 
-        let result = database.create_table("foobar");
+        let result =
+            database.create_table("foobar", vec![("hello".to_string(), DataType::Integer)]);
 
         assert!(result.is_ok(), "Failed to create table");
     }
@@ -152,9 +161,9 @@ mod tests {
     fn test_creating_table_that_already_exists() {
         let mut database = Database::new();
         let table_name = "new_database";
-        assert!(database.create_table(table_name).is_ok());
+        assert!(database.create_table(table_name, vec![]).is_ok());
 
-        let result = database.create_table(table_name);
+        let result = database.create_table(table_name, vec![]);
 
         assert_eq!(
             Err(Error::TableAlreadyExists(table_name.to_string())),
@@ -166,7 +175,7 @@ mod tests {
     fn test_adding_column_to_table() {
         let mut database = Database::new();
         let table_name = "new_database";
-        assert!(database.create_table(table_name).is_ok());
+        assert!(database.create_table(table_name, vec![]).is_ok());
 
         let result = database.add_column(table_name, "age", DataType::Integer);
 
@@ -177,9 +186,8 @@ mod tests {
     fn inserting_row_to_a_table() {
         let mut database = Database::new();
         let table_name = "new_table";
-        assert!(database.create_table(table_name).is_ok());
         assert!(database
-            .add_column(table_name, "age", DataType::Integer)
+            .create_table(table_name, vec![("age".to_string(), DataType::Integer)])
             .is_ok());
 
         let result = database.insert_row(table_name, vec![Value::Integer(3)]);
@@ -191,9 +199,8 @@ mod tests {
     fn inserting_row_with_different_len_values() {
         let mut database = Database::new();
         let table_name = "new_table";
-        assert!(database.create_table(table_name).is_ok());
         assert!(database
-            .add_column(table_name, "age", DataType::Integer)
+            .create_table(table_name, vec![("age".to_string(), DataType::Integer)])
             .is_ok());
 
         let result = database.insert_row(table_name, vec![Value::Integer(3), Value::Integer(5)]);
@@ -205,9 +212,8 @@ mod tests {
     fn select_all_from_table() {
         let mut database = Database::new();
         let table_name = "new_table";
-        assert!(database.create_table(table_name).is_ok());
         assert!(database
-            .add_column(table_name, "age", DataType::Integer)
+            .create_table(table_name, vec![("age".to_string(), DataType::Integer)])
             .is_ok());
         assert!(database
             .insert_row(table_name, vec![Value::Integer(5)])
@@ -225,9 +231,8 @@ mod tests {
     fn select_all_from_table_with_different_columns_over_time() {
         let mut database = Database::new();
         let table_name = "new_table";
-        assert!(database.create_table(table_name).is_ok());
         assert!(database
-            .add_column(table_name, "age", DataType::Integer)
+            .create_table(table_name, vec![("age".to_string(), DataType::Integer)])
             .is_ok());
         assert!(database
             .insert_row(table_name, vec![Value::Integer(1)])
@@ -254,7 +259,7 @@ mod tests {
     fn select_all_from_empty_table() {
         let mut database = Database::new();
         let table_name = "new_table";
-        assert!(database.create_table(table_name).is_ok());
+        assert!(database.create_table(table_name, vec![]).is_ok());
 
         let result = database
             .select_all_columns(table_name)
@@ -268,12 +273,14 @@ mod tests {
     fn select_from_table() {
         let mut database = Database::new();
         let table_name = "new_table";
-        assert!(database.create_table(table_name).is_ok());
         assert!(database
-            .add_column(table_name, "age", DataType::Integer)
-            .is_ok());
-        assert!(database
-            .add_column(table_name, "birthday", DataType::Integer)
+            .create_table(
+                table_name,
+                vec![
+                    ("age".to_string(), DataType::Integer),
+                    ("birthday".to_string(), DataType::Integer),
+                ]
+            )
             .is_ok());
         assert!(database
             .insert_row(table_name, vec![Value::Integer(5), Value::Integer(3)])
@@ -291,13 +298,7 @@ mod tests {
     fn select_with_column_that_doesnt_exist() {
         let mut database = Database::new();
         let table_name = "new_table";
-        assert!(database.create_table(table_name).is_ok());
-        assert!(database
-            .add_column(table_name, "age", DataType::Integer)
-            .is_ok());
-        assert!(database
-            .insert_row(table_name, vec![Value::Integer(5)])
-            .is_ok());
+        assert!(database.create_table(table_name, vec![]).is_ok());
 
         let result = database.select_columns_by_name(table_name, vec!["lol123"]);
 
@@ -307,7 +308,7 @@ mod tests {
     #[test]
     fn test_inserting_record_and_getting_it_back_out() {
         let mut table_manager = TableManager::new(1);
-        table_manager.add_column("day", DataType::Integer);
+        table_manager.add_column("day", DataType::Integer).unwrap();
 
         let record_id = table_manager
             .insert_record(vec![Value::Integer(29)])

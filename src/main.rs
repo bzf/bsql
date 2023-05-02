@@ -3,7 +3,7 @@ use std::io::Write;
 mod internal;
 mod print_table;
 
-use internal::{parse, ColumnDefinition, Command, Error, QueryResult, Token};
+use internal::{parse, ColumnDefinition, Command, DataType, Error, QueryResult, Token};
 use print_table::{print_row_result, print_table};
 
 fn main() {
@@ -80,20 +80,13 @@ fn main() {
                             continue;
                         };
 
-                        match database_manager.create_table(database_name, &table_name) {
-                            Ok(query_result) => {
-                                for column in column_definitions {
-                                    database_manager.add_column(
-                                        database_name,
-                                        &table_name,
-                                        &column.0,
-                                        column.1.into(),
-                                    );
-                                }
+                        let columns: Vec<(String, DataType)> = column_definitions
+                            .into_iter()
+                            .map(|(c, dt)| (c, dt.into()))
+                            .collect();
 
-                                print_query_result(&query_result)
-                            }
-
+                        match database_manager.create_table(database_name, &table_name, columns) {
+                            Ok(query_result) => print_query_result(&query_result),
                             Err(error) => print_error(&error),
                         }
                     }

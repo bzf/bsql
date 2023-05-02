@@ -46,13 +46,21 @@ impl TableManager {
             .collect()
     }
 
-    pub fn add_column(&mut self, column_name: &str, data_type: DataType) {
-        self.column_names
-            .insert(column_name.to_string(), self.next_column_id as u8);
-        self.column_definitions
-            .push(ColumnDefinition::new(self.next_column_id as u8, data_type));
+    pub fn add_column(&mut self, column_name: &str, data_type: DataType) -> Result<(), Error> {
+        println!("table_manager.add_column {} {:?}", column_name, data_type);
 
-        self.next_column_id += 1;
+        if !self.column_names.contains_key(column_name) {
+            self.column_names
+                .insert(column_name.to_string(), self.next_column_id as u8);
+            self.column_definitions
+                .push(ColumnDefinition::new(self.next_column_id as u8, data_type));
+
+            self.next_column_id += 1;
+
+            Ok(())
+        } else {
+            Err(Error::ColumnAlreadyExist(column_name.to_string()))
+        }
     }
 
     pub fn insert_record(&mut self, values: Vec<Value>) -> Option<u64> {
@@ -215,12 +223,14 @@ mod tests {
     #[test]
     fn get_records_for_pages_with_different_columns() {
         let mut table_manager = TableManager::new(1);
-        table_manager.add_column("day", DataType::Integer);
+        table_manager.add_column("day", DataType::Integer).unwrap();
         assert!(table_manager
             .insert_record(vec![Value::Integer(31)])
             .is_some());
 
-        table_manager.add_column("month", DataType::Integer);
+        table_manager
+            .add_column("month", DataType::Integer)
+            .unwrap();
         assert!(table_manager
             .insert_record(vec![Value::Integer(1), Value::Integer(5)])
             .is_some());
@@ -244,12 +254,14 @@ mod tests {
     #[test]
     fn test_get_records_with_specific_columns() {
         let mut table_manager = TableManager::new(1);
-        table_manager.add_column("day", DataType::Integer);
+        table_manager.add_column("day", DataType::Integer).unwrap();
         assert!(table_manager
             .insert_record(vec![Value::Integer(13)])
             .is_some());
 
-        table_manager.add_column("month", DataType::Integer);
+        table_manager
+            .add_column("month", DataType::Integer)
+            .unwrap();
         assert!(table_manager
             .insert_record(vec![Value::Integer(2), Value::Integer(4)])
             .is_some());
@@ -277,7 +289,7 @@ mod tests {
     #[test]
     fn test_get_records_with_specific_columns_with_invalid_columns() {
         let mut table_manager = TableManager::new(1);
-        table_manager.add_column("day", DataType::Integer);
+        table_manager.add_column("day", DataType::Integer).unwrap();
 
         assert_eq!(
             Err(Error::ColumnDoesNotExist("month".to_string())),
