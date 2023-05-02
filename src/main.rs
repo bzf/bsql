@@ -29,8 +29,8 @@ fn main() {
                 }
             }
 
-            ["\\l"] => list_databases(database_manager.database_names()),
-            ["\\list"] => list_databases(database_manager.database_names()),
+            ["\\l"] => print_databases(database_manager.database_names()),
+            ["\\list"] => print_databases(database_manager.database_names()),
 
             ["\\dt"] => {
                 let Some(database_name) = &active_database else {
@@ -39,7 +39,7 @@ fn main() {
                 };
 
                 if let Some(table_names) = database_manager.database_table_names(&database_name) {
-                    list_tables(table_names)
+                    print_tables(table_names)
                 } else {
                     println!("FATAL: Active database no longer exists.");
                 }
@@ -54,7 +54,7 @@ fn main() {
                 if let Some(table_definition) =
                     database_manager.table_definition(database_name, table_name)
                 {
-                    list_table_definition(table_definition)
+                    print_table_definition(table_definition)
                 } else {
                     println!("FATAL: Active database no longer exists.");
                 }
@@ -169,21 +169,21 @@ fn main() {
     }
 }
 
-fn list_databases(database_names: Vec<String>) {
+fn print_databases(database_names: Vec<String>) {
     print_table(
         vec!["Database name"],
         database_names.into_iter().map(|name| vec![name]).collect(),
     );
 }
 
-fn list_tables(table_names: Vec<String>) {
+fn print_tables(table_names: Vec<String>) {
     print_table(
         vec!["Table name"],
         table_names.into_iter().map(|name| vec![name]).collect(),
     );
 }
 
-fn list_table_definition(column_definitions: Vec<(String, ColumnDefinition)>) {
+fn print_table_definition(column_definitions: Vec<(String, ColumnDefinition)>) {
     print_table(
         vec!["Column name", "Data type"],
         column_definitions
