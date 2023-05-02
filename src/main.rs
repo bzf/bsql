@@ -3,14 +3,14 @@ use std::io::Write;
 mod internal;
 mod print_table;
 
-use internal::{parse, ColumnDefinition, Command, Token};
-use print_table::{print_query_result, print_table};
+use internal::{parse, ColumnDefinition, Command, Error, QueryResult, Token};
+use print_table::{print_row_result, print_table};
 
 fn main() {
     let mut database_manager = internal::Manager::new();
     let mut active_database: Option<String> = None;
 
-    'prompt_loop: loop {
+    loop {
         let expression = if let Some(database_name) = &active_database {
             prompt(&format!("{}> ", database_name))
         } else {
@@ -34,14 +34,13 @@ fn main() {
 
             ["\\dt"] => {
                 let Some(database_name) = &active_database else {
-                    println!("No active database selected.");
+                    println!("FATAL: No active database selected.");
                     continue;
                 };
 
-                if let Some(table_names) = database_manager.database_table_names(&database_name) {
-                    print_tables(table_names)
-                } else {
-                    println!("FATAL: Active database no longer exists.");
+                match database_manager.database_table_names(&database_name) {
+                    Ok(table_names) => print_tables(table_names),
+                    Err(error) => print_error(&error),
                 }
             }
 
@@ -51,12 +50,9 @@ fn main() {
                     continue;
                 };
 
-                if let Some(table_definition) =
-                    database_manager.table_definition(database_name, table_name)
-                {
-                    print_table_definition(table_definition)
-                } else {
-                    println!("FATAL: Active database no longer exists.");
+                match database_manager.table_definition(database_name, table_name) {
+                    Ok(table_definition) => print_table_definition(table_definition),
+                    Err(error) => print_error(&error),
                 }
             }
 
@@ -69,7 +65,10 @@ fn main() {
 
                 match command {
                     Ok(Command::CreateDatabase { database_name }) => {
-                        database_manager.create_database(&database_name);
+                        match database_manager.create_database(&database_name) {
+                            Ok(query_result) => print_query_result(&query_result),
+                            Err(error) => print_error(&error),
+                        }
                     }
 
                     Ok(Command::CreateTable {
@@ -81,19 +80,21 @@ fn main() {
                             continue;
                         };
 
-                        if database_manager.create_table(database_name, &table_name) {
-                            for column in column_definitions {
-                                database_manager.add_column(
-                                    database_name,
-                                    &table_name,
-                                    &column.0,
-                                    column.1.into(),
-                                );
+                        match database_manager.create_table(database_name, &table_name) {
+                            Ok(query_result) => {
+                                for column in column_definitions {
+                                    database_manager.add_column(
+                                        database_name,
+                                        &table_name,
+                                        &column.0,
+                                        column.1.into(),
+                                    );
+                                }
+
+                                print_query_result(&query_result)
                             }
 
-                            println!("CREATE TABLE");
-                        } else {
-                            println!("ERROR: Table \"{}\" already exists.", database_name);
+                            Err(error) => print_error(&error),
                         }
                     }
 
@@ -103,11 +104,14 @@ fn main() {
                             continue;
                         };
 
-                        database_manager.insert_row(
+                        match database_manager.insert_row(
                             database_name,
                             &table_name,
                             values.into_iter().map(|value| value.into()).collect(),
-                        );
+                        ) {
+                            Ok(query_result) => print_query_result(&query_result),
+                            Err(error) => print_error(&error),
+                        }
                     }
 
                     Ok(Command::Select {
@@ -120,44 +124,32 @@ fn main() {
                             continue;
                         };
 
-                        let Some(table_definitions) = database_manager.table_definition(database_name, &table_name) else {
-                            println!("FATAL: Table does not exist.");
-                            continue;
-                        };
-
-                        let table_names: Vec<&String> =
-                            table_definitions.iter().map(|(k, _)| k).collect();
-
                         match &identifiers
                             .iter()
                             .map(|i| i.as_str())
                             .collect::<Vec<&str>>()[..]
                         {
                             ["*"] => {
-                                let query_result = database_manager
-                                    .select_all(database_name, &table_name)
-                                    .unwrap();
+                                let query_result =
+                                    database_manager.select_all(database_name, &table_name);
 
-                                print_query_result(&query_result);
+                                match query_result {
+                                    Ok(query_result) => print_query_result(&query_result),
+                                    Err(error) => print_error(&error),
+                                }
                             }
 
                             _ => {
-                                for identifier in identifiers.iter() {
-                                    if !table_names.contains(&&identifier) {
-                                        println!(
-                                            "ERROR: column \"{}\" does not exist.",
-                                            identifier
-                                        );
+                                let query_result = database_manager.select(
+                                    database_name,
+                                    &table_name,
+                                    identifiers.clone(),
+                                );
 
-                                        continue 'prompt_loop;
-                                    }
+                                match query_result {
+                                    Ok(query_result) => print_query_result(&query_result),
+                                    Err(error) => print_error(&error),
                                 }
-
-                                let query_result = database_manager
-                                    .select(database_name, &table_name, identifiers.clone())
-                                    .unwrap();
-
-                                print_query_result(&query_result);
                             }
                         }
                     }
@@ -191,6 +183,17 @@ fn print_table_definition(column_definitions: Vec<(String, ColumnDefinition)>) {
             .map(|(column_name, definition)| vec![column_name, definition.data_type().to_string()])
             .collect(),
     );
+}
+
+fn print_query_result(query_result: &QueryResult) {
+    match query_result {
+        QueryResult::CommandSuccessMessage(message) => println!("{}", message),
+        QueryResult::RowResult(row_result) => print_row_result(row_result),
+    }
+}
+
+fn print_error(error: &Error) {
+    eprintln!("ERROR: {:?}", error);
 }
 
 fn prompt(name: &str) -> String {

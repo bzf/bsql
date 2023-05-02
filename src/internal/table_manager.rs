@@ -1,6 +1,6 @@
 use std::{collections::HashMap, rc::Rc, sync::RwLock};
 
-use super::{ColumnDefinition, DataType, RowResult, TablePage, Value};
+use super::{ColumnDefinition, DataType, Error, RowResult, TablePage, Value};
 
 type ColumnId = u8;
 
@@ -105,16 +105,16 @@ impl TableManager {
         RowResult::new(self.column_names.keys().cloned().collect(), rows)
     }
 
-    pub fn get_records_for_columns(&self, column_names: &Vec<&str>) -> Option<RowResult> {
+    pub fn get_records_for_columns(&self, column_names: &Vec<&str>) -> Result<RowResult, Error> {
         let sorted_column_indices: Vec<ColumnId> = column_names
-            .iter()
-            .map(|column_name| self.column_names.get(&**column_name))
-            .flat_map(|i| i.map(|t| *t))
-            .collect();
-
-        if sorted_column_indices.len() != column_names.len() {
-            return None;
-        }
+            .into_iter()
+            .map(|column_name| {
+                self.column_names
+                    .get(*column_name)
+                    .ok_or(Error::ColumnDoesNotExist(column_name.to_string()))
+                    .map(|column_id| *column_id)
+            })
+            .collect::<Result<Vec<ColumnId>, Error>>()?;
 
         let records = self.get_records();
         let sorted_rows = records
@@ -128,7 +128,7 @@ impl TableManager {
             })
             .collect();
 
-        Some(RowResult::new(
+        Ok(RowResult::new(
             column_names.iter().map(|name| name.to_string()).collect(),
             sorted_rows,
         ))
@@ -280,7 +280,7 @@ mod tests {
         table_manager.add_column("day", DataType::Integer);
 
         assert_eq!(
-            None,
+            Err(Error::ColumnDoesNotExist("month".to_string())),
             table_manager.get_records_for_columns(&vec!["month", "day"])
         )
     }
