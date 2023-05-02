@@ -3,7 +3,7 @@ use std::io::Write;
 mod internal;
 mod print_table;
 
-use internal::{parse, ColumnDefinition, Command, DataType, Error, QueryResult, Token};
+use internal::{ColumnDefinition, Error, QueryResult};
 use print_table::{print_row_result, print_table};
 
 fn main() {
@@ -46,7 +46,7 @@ fn main() {
 
             ["\\d+", table_name] => {
                 let Some(database_name) = &active_database else {
-                    println!("No active database selected.");
+                    println!("FATAL: No active database selected.");
                     continue;
                 };
 
@@ -61,93 +61,13 @@ fn main() {
             }
 
             _ => {
-                let command = parse(&expression);
-
-                match command {
-                    Ok(Command::CreateDatabase { database_name }) => {
-                        match database_manager.create_database(&database_name) {
-                            Ok(query_result) => print_query_result(&query_result),
-                            Err(error) => print_error(&error),
-                        }
+                if let Some(ref database_name) = active_database {
+                    match database_manager.execute(&database_name, &expression) {
+                        Ok(query_result) => print_query_result(&query_result),
+                        Err(error) => print_error(&error),
                     }
-
-                    Ok(Command::CreateTable {
-                        table_name,
-                        column_definitions,
-                    }) => {
-                        let Some(ref database_name) = active_database else {
-                            println!("No active database selected.");
-                            continue;
-                        };
-
-                        let columns: Vec<(String, DataType)> = column_definitions
-                            .into_iter()
-                            .map(|(c, dt)| (c, dt.into()))
-                            .collect();
-
-                        match database_manager.create_table(database_name, &table_name, columns) {
-                            Ok(query_result) => print_query_result(&query_result),
-                            Err(error) => print_error(&error),
-                        }
-                    }
-
-                    Ok(Command::InsertInto { table_name, values }) => {
-                        let Some(ref database_name) = active_database else {
-                            println!("No active database selected.");
-                            continue;
-                        };
-
-                        match database_manager.insert_row(
-                            database_name,
-                            &table_name,
-                            values.into_iter().map(|value| value.into()).collect(),
-                        ) {
-                            Ok(query_result) => print_query_result(&query_result),
-                            Err(error) => print_error(&error),
-                        }
-                    }
-
-                    Ok(Command::Select {
-                        identifiers,
-                        table_name,
-                        ..
-                    }) => {
-                        let Some(ref database_name) = active_database else {
-                            println!("No active database selected.");
-                            continue;
-                        };
-
-                        match &identifiers
-                            .iter()
-                            .map(|i| i.as_str())
-                            .collect::<Vec<&str>>()[..]
-                        {
-                            ["*"] => {
-                                let query_result =
-                                    database_manager.select_all(database_name, &table_name);
-
-                                match query_result {
-                                    Ok(query_result) => print_query_result(&query_result),
-                                    Err(error) => print_error(&error),
-                                }
-                            }
-
-                            _ => {
-                                let query_result = database_manager.select(
-                                    database_name,
-                                    &table_name,
-                                    identifiers.clone(),
-                                );
-
-                                match query_result {
-                                    Ok(query_result) => print_query_result(&query_result),
-                                    Err(error) => print_error(&error),
-                                }
-                            }
-                        }
-                    }
-
-                    Err(error) => eprintln!("{:?}", error),
+                } else {
+                    eprintln!("FATAL: No active database selected.");
                 }
             }
         }
