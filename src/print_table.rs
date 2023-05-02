@@ -1,3 +1,5 @@
+use crate::internal::QueryResult;
+
 pub fn print_table(headers: Vec<&str>, items: Vec<Vec<impl std::fmt::Display>>) {
     // Calculate the maximum width of each column
     let column_widths: Vec<usize> = headers
@@ -35,4 +37,24 @@ pub fn print_table(headers: Vec<&str>, items: Vec<Vec<impl std::fmt::Display>>) 
         }
         println!();
     }
+}
+
+pub fn print_query_result(query_result: &QueryResult) {
+    print_table(
+        query_result.columns().iter().map(|i| i.as_ref()).collect(),
+        query_result
+            .rows()
+            .into_iter()
+            .map(|row| {
+                row.into_iter()
+                    .map(|value| {
+                        value
+                            .as_ref()
+                            .map(|v| v.to_string())
+                            .unwrap_or("NULL".to_string())
+                    })
+                    .collect()
+            })
+            .collect(),
+    );
 }

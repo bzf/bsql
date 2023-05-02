@@ -7,7 +7,7 @@ mod parser;
 mod print_table;
 
 use internal::ColumnDefinition;
-use print_table::print_table;
+use print_table::{print_query_result, print_table};
 
 fn main() {
     let mut database_manager = internal::Manager::new();
@@ -137,25 +137,11 @@ fn main() {
                             .collect::<Vec<&str>>()[..]
                         {
                             ["*"] => {
-                                let records = database_manager
+                                let query_result = database_manager
                                     .select_all(database_name, &table_name)
                                     .unwrap();
 
-                                print_table(
-                                    table_definitions.iter().map(|(k, _)| k.as_str()).collect(),
-                                    records
-                                        .into_iter()
-                                        .map(|row| {
-                                            row.into_iter()
-                                                .map(|value| {
-                                                    value
-                                                        .map(|v| v.to_string())
-                                                        .unwrap_or("NULL".to_string())
-                                                })
-                                                .collect()
-                                        })
-                                        .collect(),
-                                );
+                                print_query_result(&query_result);
                             }
 
                             _ => {
@@ -170,25 +156,11 @@ fn main() {
                                     }
                                 }
 
-                                let records = database_manager
+                                let query_result = database_manager
                                     .select(database_name, &table_name, identifiers.clone())
                                     .unwrap();
 
-                                print_table(
-                                    identifiers.iter().map(|i| i.as_str()).collect(),
-                                    records
-                                        .into_iter()
-                                        .map(|row| {
-                                            row.into_iter()
-                                                .map(|value| {
-                                                    value
-                                                        .map(|v| v.to_string())
-                                                        .unwrap_or("NULL".to_string())
-                                                })
-                                                .collect()
-                                        })
-                                        .collect(),
-                                );
+                                print_query_result(&query_result);
                             }
                         }
                     }

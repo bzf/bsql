@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use super::{ColumnDefinition, DataType, TableManager, Value};
+use super::{ColumnDefinition, DataType, QueryResult, TableManager, Value};
 
 type TableId = u64;
 
@@ -80,32 +80,26 @@ impl Database {
         table_manager.insert_record(values).is_some()
     }
 
-    pub fn select_all_columns(&self, table_name: &str) -> Option<Vec<Vec<Option<Value>>>> {
+    pub fn select_all_columns(&self, table_name: &str) -> Option<QueryResult> {
         let Some(table_id) = self.table_names.get(table_name) else {
             return None;
         };
 
-        if let Some(table_manager) = self.table_managers.get(table_id) {
-            return Some(table_manager.get_records());
-        } else {
-            return Some(vec![]);
-        };
+        Some(self.table_managers.get(table_id)?.get_records())
     }
 
     pub fn select_columns_by_name(
         &self,
         table_name: &str,
         column_names: Vec<&str>,
-    ) -> Option<Vec<Vec<Option<Value>>>> {
+    ) -> Option<QueryResult> {
         let Some(table_id) = self.table_names.get(table_name) else {
             return None;
         };
 
-        let Some(table_manager) = self.table_managers.get(table_id) else {
-            return None;
-        };
-
-        return table_manager.get_records_for_columns(&column_names);
+        self.table_managers
+            .get(table_id)?
+            .get_records_for_columns(&column_names)
     }
 
     fn table_exists(&self, table_name: &str) -> bool {
@@ -193,7 +187,8 @@ mod tests {
             .select_all_columns(table_name)
             .expect("Failed to select from database");
 
-        assert_eq!(vec![vec![Some(Value::Integer(5))]], result);
+        assert_eq!(1, *result.count());
+        assert_eq!(vec![vec![Some(Value::Integer(5))]], result.rows());
     }
 
     #[test]
@@ -212,8 +207,9 @@ mod tests {
             .select_all_columns(table_name)
             .expect("Failed to select from database");
 
-        assert!(result.contains(&vec![Some(Value::Integer(1)), None]));
-        assert!(result.contains(&vec![Some(Value::Integer(1)), None]));
+        assert_eq!(2, *result.count());
+        assert!(result.rows().contains(&vec![Some(Value::Integer(1)), None]));
+        assert!(result.rows().contains(&vec![Some(Value::Integer(1)), None]));
     }
 
     #[test]
@@ -226,7 +222,8 @@ mod tests {
             .select_all_columns(table_name)
             .expect("Failed to select from database");
 
-        assert!(result.is_empty());
+        assert_eq!(0, *result.count());
+        assert!(result.rows().is_empty());
     }
 
     #[test]
@@ -242,7 +239,8 @@ mod tests {
             .select_columns_by_name(table_name, vec!["birthday"])
             .expect("Failed to select from database");
 
-        assert_eq!(vec![vec![Some(Value::Integer(3))]], result);
+        assert_eq!(1, *result.count());
+        assert_eq!(vec![vec![Some(Value::Integer(3))]], result.rows());
     }
 
     #[test]
@@ -271,6 +269,13 @@ mod tests {
             .get_record(record_id)
             .expect("Failed to retrive record by interal record id");
 
-        assert_eq!(vec![Some(Value::Integer(29))], record);
+        assert_eq!(1, *record.count());
+        assert_eq!(
+            vec![Some(Value::Integer(29))],
+            *record
+                .rows()
+                .first()
+                .expect("Failed to fetch the first record")
+        );
     }
 }
