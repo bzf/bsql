@@ -2,11 +2,14 @@ use std::io::Write;
 
 use crate::parser::Command;
 
+mod error;
 mod internal;
 mod parser;
 mod print_table;
 
+use error::Error;
 use internal::ColumnDefinition;
+use parser::Token;
 use print_table::{print_query_result, print_table};
 
 fn main() {
@@ -71,11 +74,11 @@ fn main() {
                 let command = parser::parse(&expression);
 
                 match command {
-                    Some(Command::CreateDatabase { database_name }) => {
+                    Ok(Command::CreateDatabase { database_name }) => {
                         database_manager.create_database(&database_name);
                     }
 
-                    Some(Command::CreateTable {
+                    Ok(Command::CreateTable {
                         table_name,
                         column_definitions,
                     }) => {
@@ -100,7 +103,7 @@ fn main() {
                         }
                     }
 
-                    Some(Command::InsertInto { table_name, values }) => {
+                    Ok(Command::InsertInto { table_name, values }) => {
                         let Some(ref database_name) = active_database else {
                             println!("No active database selected.");
                             continue;
@@ -113,7 +116,7 @@ fn main() {
                         );
                     }
 
-                    Some(Command::Select {
+                    Ok(Command::Select {
                         identifiers,
                         table_name,
                         ..
@@ -165,7 +168,7 @@ fn main() {
                         }
                     }
 
-                    None => (),
+                    Err(error) => eprintln!("{:?}", error),
                 }
             }
         }

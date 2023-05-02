@@ -2,10 +2,27 @@ mod data_type_identifier;
 mod literal_value;
 mod tokenizer;
 
+use super::Error;
 use literal_value::LiteralValue;
-use tokenizer::Token;
 
 pub use data_type_identifier::DataTypeIdentifier;
+pub use tokenizer::Token;
+
+#[macro_export]
+macro_rules! expect_token {
+    ( $token:expr, $expected_token:pat ) => {{
+        let token = $token;
+
+        match token {
+            Some($expected_token) => Ok(token.unwrap()),
+            Some(_) => Err(Error::UnexpectedToken {
+                actual: token.unwrap(),
+            }),
+
+            None => Err(Error::MissingToken),
+        }
+    }};
+}
 
 #[derive(Debug, PartialEq)]
 pub enum Command {
@@ -43,7 +60,7 @@ pub enum CompareOperation {
 }
 
 // TODO: Only reads one command at a time and ignores any tokens after that.
-pub fn parse(input: &str) -> Option<Command> {
+pub fn parse(input: &str) -> Result<Command, Error> {
     let tokens = tokenizer::tokenize(input);
 
     let command_tokens: Vec<Token> = tokens
@@ -56,22 +73,22 @@ pub fn parse(input: &str) -> Option<Command> {
         Some(Token::InsertKeyword) => parse_insert_command(command_tokens),
         Some(Token::SelectKeyword) => parse_select_command(command_tokens),
 
-        _ => None,
+        Some(token) => Err(Error::UnexpectedToken {
+            actual: token.clone(),
+        }),
+        None => Err(Error::MissingToken),
     }
 }
 
-fn parse_create_command(mut tokens: Vec<Token>) -> Option<Command> {
+fn parse_create_command(mut tokens: Vec<Token>) -> Result<Command, Error> {
     tokens.reverse();
-    tokens.pop()?; // Skip the first known `Token::CreateKeyword`
+    expect_token!(tokens.pop(), Token::CreateKeyword)?;
 
-    let create_type_keyword = tokens.pop()?;
-
-    let Token::Identifier(identifier) = tokens.pop()? else {
-        return None;
-    };
+    let create_type_keyword = tokens.pop().ok_or(Error::MissingToken)?;
+    let identifier = expect_identifier(tokens.pop())?;
 
     match create_type_keyword {
-        Token::DatabaseKeyword => Some(Command::CreateDatabase {
+        Token::DatabaseKeyword => Ok(Command::CreateDatabase {
             database_name: identifier,
         }),
         Token::TableKeyword => {
@@ -79,16 +96,15 @@ fn parse_create_command(mut tokens: Vec<Token>) -> Option<Command> {
             return parse_create_table_command(identifier, tokens);
         }
 
-        _ => None,
+        _ => Err(Error::UnexpectedToken {
+            actual: create_type_keyword,
+        }),
     }
 }
 
-fn parse_select_command(tokens: Vec<Token>) -> Option<Command> {
+fn parse_select_command(tokens: Vec<Token>) -> Result<Command, Error> {
     let mut tokens = tokens.into_iter().peekable();
-    let Some(Token::SelectKeyword) = tokens.next() else {
-        // Expected to start with a `SelectKeyword`
-        return None;
-    };
+    expect_token!(tokens.next(), Token::SelectKeyword)?;
 
     let mut identifiers: Vec<String> = vec![];
 
@@ -100,16 +116,12 @@ fn parse_select_command(tokens: Vec<Token>) -> Option<Command> {
 
             Some(Token::FromKeyword) => break,
 
-            _ => {
-                // Unexpected token
-                return None;
-            }
+            Some(token) => return Err(Error::UnexpectedToken { actual: token }),
+            None => return Err(Error::MissingToken),
         }
     }
 
-    let Token::Identifier(table_name) = tokens.next()? else {
-        return None; // Expeceted a table_name identifier
-    };
+    let table_name = expect_identifier(tokens.next())?;
 
     let mut where_conditions = vec![];
 
@@ -122,36 +134,23 @@ fn parse_select_command(tokens: Vec<Token>) -> Option<Command> {
         _ => (),
     }
 
-    return Some(Command::Select {
+    return Ok(Command::Select {
         identifiers,
         table_name,
         where_conditions,
     });
 }
 
-fn parse_insert_command(mut tokens: Vec<Token>) -> Option<Command> {
+fn parse_insert_command(mut tokens: Vec<Token>) -> Result<Command, Error> {
     tokens.reverse();
-    tokens.pop()?; // Skip the first known `Token::InsertKeyword`
 
-    let Some(Token::IntoKeyword) = tokens.pop() else {
-        // Expeceted `Token::IntoKeyword`
-        return None;
-    };
+    expect_token!(tokens.pop(), Token::InsertKeyword)?;
+    expect_token!(tokens.pop(), Token::IntoKeyword)?;
 
-    let Token::Identifier(identifier) = tokens.pop()? else {
-        // Expeceted an table identifier
-        return None;
-    };
+    let identifier = expect_identifier(tokens.pop())?;
 
-    let Token::ValuesKeyword = tokens.pop()? else {
-        // Expeceted `Token::ValuesKeyword`
-        return None;
-    };
-
-    let Token::OpeningParenthesis = tokens.pop()? else {
-        // Expeceted `Token::OpeningParenthesis`
-        return None;
-    };
+    expect_token!(tokens.pop(), Token::ValuesKeyword)?;
+    expect_token!(tokens.pop(), Token::OpeningParenthesis)?;
 
     tokens.reverse(); // Return the list back to the input order
     let mut tokens = tokens.into_iter().peekable();
@@ -159,40 +158,48 @@ fn parse_insert_command(mut tokens: Vec<Token>) -> Option<Command> {
     let mut literal_values: Vec<LiteralValue> = vec![];
 
     loop {
-        if Some(&Token::ClosingParenthesis) == tokens.peek() {
-            break;
-        } else if let Some(literal_value) = tokens.next()?.into() {
-            literal_values.push(literal_value);
+        let next_token = tokens.next();
 
-            if let Some(Token::Comma) = tokens.peek() {
-                tokens.next(); // Step over the trailing comma
+        match next_token {
+            Some(Token::ClosingParenthesis) => break,
+
+            Some(token) => {
+                let literal_value: LiteralValue = {
+                    let literal: Option<LiteralValue> = token.clone().into();
+                    literal.ok_or(Error::UnexpectedToken { actual: token })?
+                };
+
+                literal_values.push(literal_value);
+
+                if let Some(Token::Comma) = tokens.peek() {
+                    tokens.next();
+                }
             }
-        } else {
-            println!("Got unexpected token: {:?}", tokens.peek());
-            return None; // Expeceted another column info or a `ClosingParenthesis`
+
+            None => return Err(Error::MissingToken),
         }
     }
 
-    return Some(Command::InsertInto {
+    return Ok(Command::InsertInto {
         table_name: identifier,
         values: literal_values,
     });
 }
 
-fn parse_create_table_command(identifier: String, tokens: Vec<Token>) -> Option<Command> {
-    Some(Command::CreateTable {
+fn parse_create_table_command(identifier: String, tokens: Vec<Token>) -> Result<Command, Error> {
+    Ok(Command::CreateTable {
         table_name: identifier,
         column_definitions: parse_column_definitions(tokens)?,
     })
 }
 
-fn parse_column_definitions(tokens: Vec<Token>) -> Option<Vec<(String, DataTypeIdentifier)>> {
+fn parse_column_definitions(
+    tokens: Vec<Token>,
+) -> Result<Vec<(String, DataTypeIdentifier)>, Error> {
     let mut column_info_list = vec![];
     let mut tokens = tokens.into_iter().peekable();
 
-    let Some(Token::OpeningParenthesis) = tokens.next() else {
-        return None; // Expected the column list to start with an openining parenthesis
-    };
+    expect_token!(tokens.next(), Token::OpeningParenthesis)?;
 
     loop {
         if Some(&Token::ClosingParenthesis) == tokens.peek() {
@@ -206,25 +213,32 @@ fn parse_column_definitions(tokens: Vec<Token>) -> Option<Vec<(String, DataTypeI
                 tokens.next(); // Step over the trailing comma
             }
         } else {
-            println!("Got unexpected token: {:?}", tokens.peek());
-            return None; // Expeceted another column info or a `ClosingParenthesis`
+            match tokens.next() {
+                Some(token) => return Err(Error::UnexpectedToken { actual: token }),
+                _ => return Err(Error::MissingToken),
+            }
         }
     }
 
-    return Some(column_info_list);
+    return Ok(column_info_list);
 }
 
 fn parse_column_definition(
     identifier_token: Token,
     data_type_token: Token,
-) -> Option<(String, DataTypeIdentifier)> {
+) -> Result<(String, DataTypeIdentifier), Error> {
     match identifier_token {
         Token::Identifier(identifier) => {
-            let data_type: Option<DataTypeIdentifier> = data_type_token.into();
-            Some((identifier, data_type?))
+            let data_type: Option<DataTypeIdentifier> = data_type_token.clone().into();
+            Ok((
+                identifier,
+                data_type.ok_or(Error::UnexpectedToken {
+                    actual: data_type_token,
+                })?,
+            ))
         }
 
-        _ => None,
+        actual => Err(Error::UnexpectedToken { actual }),
     }
 }
 
@@ -247,6 +261,14 @@ fn parse_condition_expression(tokens: Vec<Token>) -> Option<ConditionExpression>
     })
 }
 
+fn expect_identifier(token: Option<Token>) -> Result<String, Error> {
+    match token {
+        Some(Token::Identifier(identifier)) => Ok(identifier),
+        Some(token) => Err(Error::UnexpectedToken { actual: token }),
+        None => Err(Error::MissingToken),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use literal_value::LiteralValue;
@@ -256,7 +278,7 @@ mod tests {
     #[test]
     fn test_parsing_create_database_expression() {
         assert_eq!(
-            Some(Command::CreateDatabase {
+            Ok(Command::CreateDatabase {
                 database_name: "my_database".to_string()
             }),
             parse("CREATE DATABASE my_database;"),
@@ -266,7 +288,7 @@ mod tests {
     #[test]
     fn test_parsing_create_table_expression() {
         assert_eq!(
-            Some(Command::CreateTable {
+            Ok(Command::CreateTable {
                 table_name: "users".to_string(),
                 column_definitions: vec![
                     ("age".to_string(), DataTypeIdentifier::Integer),
@@ -280,7 +302,7 @@ mod tests {
     #[test]
     fn test_parsing_insert_into_expression() {
         assert_eq!(
-            Some(Command::InsertInto {
+            Ok(Command::InsertInto {
                 table_name: "users2".to_string(),
                 values: vec![LiteralValue::Integer(12)]
             }),
@@ -291,7 +313,7 @@ mod tests {
     #[test]
     fn test_parsing_insert_into_expression_with_multiple_values() {
         assert_eq!(
-            Some(Command::InsertInto {
+            Ok(Command::InsertInto {
                 table_name: "users2".to_string(),
                 values: vec![LiteralValue::Integer(12), LiteralValue::Integer(14)]
             }),
@@ -302,7 +324,7 @@ mod tests {
     #[test]
     fn test_parsing_select_all() {
         assert_eq!(
-            Some(Command::Select {
+            Ok(Command::Select {
                 identifiers: vec!["*".to_string()],
                 table_name: "my_table".to_string(),
                 where_conditions: vec![],
@@ -314,7 +336,7 @@ mod tests {
     #[test]
     fn test_parsing_select_with_where_condition() {
         assert_eq!(
-            Some(Command::Select {
+            Ok(Command::Select {
                 identifiers: vec!["*".to_string()],
                 table_name: "my_table".to_string(),
                 where_conditions: vec![ConditionExpression {
