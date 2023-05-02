@@ -1,6 +1,7 @@
 mod column_definition;
 mod data_type;
 mod database;
+mod error;
 mod manager;
 mod parser;
 mod query_result;
@@ -16,6 +17,7 @@ use table_page::TablePage;
 
 pub use column_definition::ColumnDefinition;
 pub use data_type::DataType;
+pub use error::Error;
 pub use manager::Manager;
 pub use parser::{parse, Command, Token};
 pub use query_result::QueryResult;

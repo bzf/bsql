@@ -4,5 +4,4 @@ use crate::Token;
 pub enum Error {
     MissingToken,
     UnexpectedToken { actual: Token },
-    MissingDataType,
 }

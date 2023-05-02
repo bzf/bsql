@@ -1,10 +1,8 @@
 use std::io::Write;
 
-mod error;
 mod internal;
 mod print_table;
 
-use error::Error;
 use internal::{parse, ColumnDefinition, Command, Token};
 use print_table::{print_query_result, print_table};
 
