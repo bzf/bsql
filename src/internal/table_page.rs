@@ -10,9 +10,6 @@ use super::{ColumnDefinition, DataType, InternalPage, RangeSet, Value};
 
 pub struct TablePage {
     column_definitions: Vec<ColumnDefinition>,
-
-    // TODO: Maybe this could be a set of available upcoming indexes? When deleting something we
-    // can mark it as available in the `TableIndex` and remove it from the set.
     slots_index: RangeSet,
 
     page: InternalPage,
