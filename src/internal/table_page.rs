@@ -15,9 +15,8 @@ pub struct TablePage {
     // can mark it as available in the `TableIndex` and remove it from the set.
     slots_index: RangeSet,
 
-    // next_record_index: u8,
     /// The `data_page` holds the serialized version of all records.
-    data_page: Vec<u8>,
+    data_page: [u8; 4096],
 }
 
 impl TablePage {
@@ -25,7 +24,7 @@ impl TablePage {
         Self {
             column_definitions,
             slots_index: RangeSet::new(0..255),
-            data_page: vec![0; 4096],
+            data_page: [0; 4096],
         }
     }
 
@@ -48,8 +47,7 @@ impl TablePage {
 
         let record_size: usize = self.record_size() as usize;
         let start_index: usize = (record_index as usize * record_size) as usize;
-        self.data_page
-            .splice(start_index..(start_index + record_size), record_data);
+        self.data_page[start_index..(start_index + record_size)].copy_from_slice(&record_data);
 
         Some(record_index)
     }
