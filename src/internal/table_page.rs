@@ -1,4 +1,4 @@
-use super::{ColumnDefinition, DataType, RangeSet, Value};
+use super::{ColumnDefinition, DataType, InternalPage, RangeSet, Value};
 
 /// A `TablePage` is a struct that represents a full page of data + metadata of records (and their
 /// columns) that are stored in a table.
@@ -15,8 +15,7 @@ pub struct TablePage {
     // can mark it as available in the `TableIndex` and remove it from the set.
     slots_index: RangeSet,
 
-    /// The `data_page` holds the serialized version of all records.
-    data_page: [u8; 4096],
+    page: InternalPage,
 }
 
 impl TablePage {
@@ -24,7 +23,7 @@ impl TablePage {
         Self {
             column_definitions,
             slots_index: RangeSet::new(0..255),
-            data_page: [0; 4096],
+            page: InternalPage::new(),
         }
     }
 
@@ -47,7 +46,8 @@ impl TablePage {
 
         let record_size: usize = self.record_size() as usize;
         let start_index: usize = (record_index as usize * record_size) as usize;
-        self.data_page[start_index..(start_index + record_size)].copy_from_slice(&record_data);
+        self.page.data_mut()[start_index..(start_index + record_size)]
+            .copy_from_slice(&record_data);
 
         Some(record_index)
     }
@@ -70,7 +70,7 @@ impl TablePage {
 
         let start_index: usize = (record_index as usize) * (self.record_size() as usize);
         let end_index: usize = start_index + self.record_size() as usize;
-        let record_data = self.data_page.get(start_index..end_index)?;
+        let record_data = self.page.data().get(start_index..end_index)?;
 
         let mut value_offset: usize = 0;
         let mut values = vec![];

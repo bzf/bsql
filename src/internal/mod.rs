@@ -3,6 +3,7 @@ mod data_type;
 mod database;
 mod error;
 mod manager;
+mod page;
 mod parser;
 mod query_result;
 mod range_set;
@@ -12,6 +13,7 @@ mod table_page;
 mod value;
 
 use database::Database;
+use page::InternalPage;
 use range_set::RangeSet;
 use table_manager::TableManager;
 use table_page::TablePage;
