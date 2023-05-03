@@ -137,7 +137,7 @@ impl Manager {
 
         database
             .insert_row(table_name, values)
-            .map(|_record_id| QueryResult::CommandSuccessMessage("INSERT INTO".to_string()))
+            .map(|_record_id| QueryResult::InsertSuccess { count: 1 })
     }
 
     fn select_all(&self, database_name: &str, table_name: &str) -> Result<QueryResult, Error> {

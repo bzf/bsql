@@ -101,6 +101,7 @@ fn print_table_definition(column_definitions: Vec<(String, ColumnDefinition)>) {
 fn print_query_result(query_result: &QueryResult) {
     match query_result {
         QueryResult::CommandSuccessMessage(message) => println!("{}", message),
+        QueryResult::InsertSuccess { count } => println!("INSERT 0 {}", count),
         QueryResult::RowResult(row_result) => print_row_result(row_result),
     }
 }
