@@ -19,7 +19,7 @@ impl TablePage {
     pub fn new(column_definitions: Vec<ColumnDefinition>) -> Self {
         Self {
             column_definitions,
-            slots_index: BitmapIndex::new(),
+            slots_index: BitmapIndex::empty(),
             page: InternalPage::new(),
         }
     }

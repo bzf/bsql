@@ -8,7 +8,7 @@ pub struct BitmapIndex {
 }
 
 impl BitmapIndex {
-    pub fn new() -> Self {
+    pub fn empty() -> Self {
         Self {
             bitmap: [0; BITMAP_LENGTH as usize],
         }
@@ -96,12 +96,12 @@ mod tests {
 
     #[test]
     fn test_that_it_has_expected_size() {
-        assert_eq!(FLAG_SIZE, BitmapIndex::new().available());
+        assert_eq!(FLAG_SIZE, BitmapIndex::empty().available());
     }
 
     #[test]
     fn test_that_it_works() {
-        let mut bitmap_index = BitmapIndex::new();
+        let mut bitmap_index = BitmapIndex::empty();
 
         assert_eq!(false, bitmap_index.is_set(0));
 
@@ -123,7 +123,7 @@ mod tests {
 
     #[test]
     fn test_that_unset_works() {
-        let mut bitmap_index = BitmapIndex::new();
+        let mut bitmap_index = BitmapIndex::empty();
 
         assert_eq!(false, bitmap_index.is_set(0));
 
@@ -136,7 +136,7 @@ mod tests {
 
     #[test]
     fn test_returns_all_set_bit_indices() {
-        let mut bitmap_index = BitmapIndex::new();
+        let mut bitmap_index = BitmapIndex::empty();
 
         assert!(bitmap_index.indices().is_empty());
 
@@ -152,7 +152,7 @@ mod tests {
 
     #[test]
     fn test_does_nothing_when_setting_the_same_bit_twice() {
-        let mut bitmap_index = BitmapIndex::new();
+        let mut bitmap_index = BitmapIndex::empty();
         assert_eq!(false, bitmap_index.is_set(0));
 
         bitmap_index.set(0);
@@ -164,7 +164,7 @@ mod tests {
 
     #[test]
     fn test_consume_finds_available_slots_in_the_middle_of_the_index() {
-        let mut bitmap_index = BitmapIndex::new();
+        let mut bitmap_index = BitmapIndex::empty();
         (0..=128).for_each(|index| {
             bitmap_index.set(index.into());
         });
@@ -178,7 +178,7 @@ mod tests {
 
     #[test]
     fn test_consume_return_available_value() {
-        let mut bitmap_index = BitmapIndex::new();
+        let mut bitmap_index = BitmapIndex::empty();
 
         for _ in 0..=u8::MAX {
             assert!(bitmap_index.consume().is_some());
@@ -198,7 +198,7 @@ mod tests {
 
     #[test]
     fn test_to_raw_works() {
-        let mut bitmap_index = BitmapIndex::new();
+        let mut bitmap_index = BitmapIndex::empty();
         bitmap_index.set(1);
         bitmap_index.set(219);
 
