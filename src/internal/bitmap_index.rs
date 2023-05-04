@@ -14,6 +14,21 @@ impl BitmapIndex {
         }
     }
 
+    pub fn from_raw(bytes: &[u8]) -> Option<Self> {
+        if bytes.len() == BITMAP_LENGTH as usize {
+            let mut bitmap: [u8; BITMAP_LENGTH as usize] = [0; BITMAP_LENGTH as usize];
+            bitmap.copy_from_slice(bytes);
+
+            Some(Self { bitmap })
+        } else {
+            None
+        }
+    }
+
+    pub fn to_raw(&self) -> &[u8; BITMAP_LENGTH as usize] {
+        &self.bitmap
+    }
+
     /// Find the first available flag, set it and return its index.
     pub fn consume(&mut self) -> Option<u8> {
         let index = self.find_available_index()?;
@@ -170,5 +185,32 @@ mod tests {
         }
 
         assert!(bitmap_index.consume().is_none());
+    }
+
+    #[test]
+    fn test_from_raw_works() {
+        let mut raw_data: Vec<u8> = vec![0x0; BITMAP_LENGTH as usize];
+        *raw_data.get_mut(2).unwrap() = 0xFF;
+        let bitmap_index = BitmapIndex::from_raw(&raw_data).expect("Failed to load from bytes");
+
+        assert_eq!(8, bitmap_index.count());
+    }
+
+    #[test]
+    fn test_to_raw_works() {
+        let mut bitmap_index = BitmapIndex::new();
+        bitmap_index.set(1);
+        bitmap_index.set(219);
+
+        let result = bitmap_index.to_raw();
+
+        assert_eq!(
+            &[
+                0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x08,
+                0x00, 0x00, 0x00, 0x00,
+            ],
+            result
+        );
     }
 }
