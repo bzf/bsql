@@ -41,8 +41,7 @@ impl TablePage {
 
         let record_size: usize = self.record_size() as usize;
         let start_index: usize = (record_index as usize * record_size) as usize;
-        self.page.data_mut()[start_index..(start_index + record_size)]
-            .copy_from_slice(&record_data);
+        self.page.data[start_index..(start_index + record_size)].copy_from_slice(&record_data);
 
         Some(record_index)
     }
@@ -64,7 +63,7 @@ impl TablePage {
 
         let start_index: usize = (record_index as usize) * (self.record_size() as usize);
         let end_index: usize = start_index + self.record_size() as usize;
-        let record_data = self.page.data().get(start_index..end_index)?;
+        let record_data = self.page.data.get(start_index..end_index)?;
 
         let mut value_offset: usize = 0;
         let mut values = vec![];
