@@ -1,3 +1,4 @@
+mod bitmap_index;
 mod column_definition;
 mod data_type;
 mod database;
@@ -12,6 +13,7 @@ mod table_manager;
 mod table_page;
 mod value;
 
+use bitmap_index::BitmapIndex;
 use database::Database;
 use page::InternalPage;
 use range_set::RangeSet;
