@@ -1,32 +1,22 @@
+use std::cell::RefCell;
+
 const FLAG_SIZE: u8 = 255;
 const BITMAP_LENGTH: u8 = (FLAG_SIZE / 8) + 1;
 
-type Bitmap = [u8; BITMAP_LENGTH as usize];
+type Bitmap = RefCell<[u8; BITMAP_LENGTH as usize]>;
 
+#[derive(Debug)]
 pub struct BitmapIndex {
     bitmap: Bitmap,
 }
 
 impl BitmapIndex {
-    pub fn empty() -> Self {
-        Self {
-            bitmap: [0; BITMAP_LENGTH as usize],
-        }
-    }
-
-    pub fn from_raw(bytes: &[u8]) -> Option<Self> {
-        if bytes.len() == BITMAP_LENGTH as usize {
-            let mut bitmap: [u8; BITMAP_LENGTH as usize] = [0; BITMAP_LENGTH as usize];
-            bitmap.copy_from_slice(bytes);
-
-            Some(Self { bitmap })
+    pub fn from_raw(bytes: Bitmap) -> Option<Self> {
+        if bytes.borrow().len() == BITMAP_LENGTH as usize {
+            Some(Self { bitmap: bytes })
         } else {
             None
         }
-    }
-
-    pub fn to_raw(&self) -> &[u8; BITMAP_LENGTH as usize] {
-        &self.bitmap
     }
 
     /// Find the first available flag, set it and return its index.
@@ -39,19 +29,19 @@ impl BitmapIndex {
 
     pub fn set(&mut self, index: u8) {
         if index <= FLAG_SIZE.into() {
-            self.bitmap[(index / 8) as usize] |= 1 << (index % 8);
+            self.bitmap.borrow_mut()[(index / 8) as usize] |= 1 << (index % 8);
         }
     }
 
     pub fn unset(&mut self, index: u8) {
         if index <= FLAG_SIZE.into() {
-            self.bitmap[(index / 8) as usize] &= 0 << (index % 8);
+            self.bitmap.borrow_mut()[(index / 8) as usize] &= 0 << (index % 8);
         }
     }
 
     pub fn is_set(&self, index: u8) -> bool {
         if index <= FLAG_SIZE.into() {
-            self.bitmap[(index / 8) as usize] & (1 << (index % 8)) != 0
+            self.bitmap.borrow()[(index / 8) as usize] & (1 << (index % 8)) != 0
         } else {
             false
         }
@@ -68,7 +58,11 @@ impl BitmapIndex {
 
     /// Returns the number of set bits.
     pub fn count(&self) -> u8 {
-        self.bitmap.iter().map(|byte| byte.count_ones() as u8).sum()
+        self.bitmap
+            .borrow()
+            .iter()
+            .map(|byte| byte.count_ones() as u8)
+            .sum()
     }
 
     /// Returns a `Vec<u8>` with all bits that are set.
@@ -77,7 +71,7 @@ impl BitmapIndex {
     }
 
     fn find_available_index(&self) -> Option<u8> {
-        for (index, byte) in self.bitmap.iter().enumerate() {
+        for (index, byte) in self.bitmap.borrow().iter().enumerate() {
             if *byte == u8::MAX {
                 continue;
             } else {
@@ -95,13 +89,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_that_it_has_expected_size() {
-        assert_eq!(FLAG_SIZE, BitmapIndex::empty().available());
-    }
-
-    #[test]
     fn test_that_it_works() {
-        let mut bitmap_index = BitmapIndex::empty();
+        let array = RefCell::new([0; BITMAP_LENGTH as usize]);
+        let mut bitmap_index = BitmapIndex::from_raw(array).expect("Failed to build BitmapIndex");
 
         assert_eq!(false, bitmap_index.is_set(0));
 
@@ -123,7 +113,8 @@ mod tests {
 
     #[test]
     fn test_that_unset_works() {
-        let mut bitmap_index = BitmapIndex::empty();
+        let array = RefCell::new([0; BITMAP_LENGTH as usize]);
+        let mut bitmap_index = BitmapIndex::from_raw(array).expect("Failed to build BitmapIndex");
 
         assert_eq!(false, bitmap_index.is_set(0));
 
@@ -136,7 +127,8 @@ mod tests {
 
     #[test]
     fn test_returns_all_set_bit_indices() {
-        let mut bitmap_index = BitmapIndex::empty();
+        let array = RefCell::new([0; BITMAP_LENGTH as usize]);
+        let mut bitmap_index = BitmapIndex::from_raw(array).expect("Failed to build BitmapIndex");
 
         assert!(bitmap_index.indices().is_empty());
 
@@ -152,7 +144,8 @@ mod tests {
 
     #[test]
     fn test_does_nothing_when_setting_the_same_bit_twice() {
-        let mut bitmap_index = BitmapIndex::empty();
+        let array = RefCell::new([0; BITMAP_LENGTH as usize]);
+        let mut bitmap_index = BitmapIndex::from_raw(array).expect("Failed to build BitmapIndex");
         assert_eq!(false, bitmap_index.is_set(0));
 
         bitmap_index.set(0);
@@ -164,7 +157,8 @@ mod tests {
 
     #[test]
     fn test_consume_finds_available_slots_in_the_middle_of_the_index() {
-        let mut bitmap_index = BitmapIndex::empty();
+        let array = RefCell::new([0; BITMAP_LENGTH as usize]);
+        let mut bitmap_index = BitmapIndex::from_raw(array).expect("Failed to build BitmapIndex");
         (0..=128).for_each(|index| {
             bitmap_index.set(index.into());
         });
@@ -178,7 +172,8 @@ mod tests {
 
     #[test]
     fn test_consume_return_available_value() {
-        let mut bitmap_index = BitmapIndex::empty();
+        let array = RefCell::new([0; BITMAP_LENGTH as usize]);
+        let mut bitmap_index = BitmapIndex::from_raw(array).expect("Failed to build BitmapIndex");
 
         for _ in 0..=u8::MAX {
             assert!(bitmap_index.consume().is_some());
@@ -189,28 +184,10 @@ mod tests {
 
     #[test]
     fn test_from_raw_works() {
-        let mut raw_data: Vec<u8> = vec![0x0; BITMAP_LENGTH as usize];
-        *raw_data.get_mut(2).unwrap() = 0xFF;
-        let bitmap_index = BitmapIndex::from_raw(&raw_data).expect("Failed to load from bytes");
+        let raw_data = RefCell::new([0; BITMAP_LENGTH as usize]);
+        raw_data.borrow_mut()[2] = 0xFF;
+        let bitmap_index = BitmapIndex::from_raw(raw_data).expect("Failed to load from bytes");
 
         assert_eq!(8, bitmap_index.count());
-    }
-
-    #[test]
-    fn test_to_raw_works() {
-        let mut bitmap_index = BitmapIndex::empty();
-        bitmap_index.set(1);
-        bitmap_index.set(219);
-
-        let result = bitmap_index.to_raw();
-
-        assert_eq!(
-            &[
-                0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x08,
-                0x00, 0x00, 0x00, 0x00,
-            ],
-            result
-        );
     }
 }

@@ -1,3 +1,5 @@
+use std::cell::RefCell;
+
 use super::{BitmapIndex, ColumnDefinition, DataType, InternalPage, Value};
 
 /// A `TablePage` is a struct that represents a full page of data + metadata of records (and their
@@ -17,10 +19,14 @@ pub struct TablePage {
 
 impl TablePage {
     pub fn new(column_definitions: Vec<ColumnDefinition>) -> Self {
+        let page = InternalPage::new();
+        let ref_cell: RefCell<[u8; 32]> = RefCell::new(page.metadadata[0..32].try_into().unwrap());
+        let slots_index = BitmapIndex::from_raw(ref_cell).expect("Failed to build BitmapIndex");
+
         Self {
             column_definitions,
-            slots_index: BitmapIndex::empty(),
-            page: InternalPage::new(),
+            page,
+            slots_index,
         }
     }
 
