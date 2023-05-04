@@ -7,7 +7,6 @@ mod manager;
 mod page;
 mod parser;
 mod query_result;
-mod range_set;
 mod row_result;
 mod table_manager;
 mod table_page;
@@ -16,7 +15,6 @@ mod value;
 use bitmap_index::BitmapIndex;
 use database::Database;
 use page::InternalPage;
-use range_set::RangeSet;
 use table_manager::TableManager;
 use table_page::TablePage;
 

@@ -1,4 +1,4 @@
-use super::{ColumnDefinition, DataType, InternalPage, RangeSet, Value};
+use super::{BitmapIndex, ColumnDefinition, DataType, InternalPage, Value};
 
 /// A `TablePage` is a struct that represents a full page of data + metadata of records (and their
 /// columns) that are stored in a table.
@@ -10,7 +10,7 @@ use super::{ColumnDefinition, DataType, InternalPage, RangeSet, Value};
 
 pub struct TablePage {
     column_definitions: Vec<ColumnDefinition>,
-    slots_index: RangeSet,
+    slots_index: BitmapIndex,
 
     page: InternalPage,
 }
@@ -19,7 +19,7 @@ impl TablePage {
     pub fn new(column_definitions: Vec<ColumnDefinition>) -> Self {
         Self {
             column_definitions,
-            slots_index: RangeSet::new(0..255),
+            slots_index: BitmapIndex::new(),
             page: InternalPage::new(),
         }
     }
@@ -28,9 +28,7 @@ impl TablePage {
     /// relative index of the record in the page.
     /// Return `None` when the page is full.
     pub fn insert_record(&mut self, record_data: Vec<Value>) -> Option<u8> {
-        if self.slots_index.is_full() {
-            return None;
-        } else if record_data.len() != self.column_definitions.len() {
+        if record_data.len() != self.column_definitions.len() {
             return None;
         }
 
@@ -52,7 +50,7 @@ impl TablePage {
     pub fn get_records(&self) -> Vec<Vec<Value>> {
         let mut records = Vec::with_capacity(self.record_count());
 
-        for record_index in self.slots_index.keys() {
+        for record_index in self.slots_index.indices() {
             records.push(self.get_record(record_index).unwrap());
         }
 
@@ -60,8 +58,7 @@ impl TablePage {
     }
 
     pub fn get_record(&self, record_index: u8) -> Option<Vec<Value>> {
-        // Check if we have a record on that slot.
-        if !self.slots_index.contains(record_index) {
+        if !self.slots_index.is_set(record_index) {
             return None;
         }
 
@@ -88,7 +85,7 @@ impl TablePage {
     }
 
     pub fn delete_record(&mut self, record_index: u8) {
-        self.slots_index.remove(record_index);
+        self.slots_index.unset(record_index);
     }
 
     pub fn column_definitions(&self) -> &Vec<ColumnDefinition> {
@@ -114,7 +111,7 @@ impl TablePage {
     }
 
     fn record_count(&self) -> usize {
-        self.slots_index.count()
+        self.slots_index.count().into()
     }
 
     fn page_header_size(&self) -> u8 {
@@ -175,7 +172,7 @@ mod tests {
         let column_definition = ColumnDefinition::new(1, DataType::Integer);
 
         let mut table_page = TablePage::new(vec![column_definition.clone()]);
-        for _ in 0..u8::MAX {
+        for _ in 0..=u8::MAX {
             table_page
                 .insert_record(vec![Value::Integer(3)])
                 .expect("Failed to insert record while filling the page");
