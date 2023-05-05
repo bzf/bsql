@@ -1,18 +1,19 @@
 use std::cell::RefCell;
 
-const FLAG_SIZE: u8 = 255;
-const BITMAP_LENGTH: u8 = (FLAG_SIZE / 8) + 1;
-
-type Bitmap = RefCell<[u8; BITMAP_LENGTH as usize]>;
-
 #[derive(Debug)]
-pub struct BitmapIndex {
-    bitmap: Bitmap,
+pub struct BitmapIndex<const N: usize>
+where
+    [(); N / 8 + 1]:,
+{
+    bitmap: RefCell<[u8; N / 8 + 1]>,
 }
 
-impl BitmapIndex {
-    pub fn from_raw(bytes: Bitmap) -> Option<Self> {
-        if bytes.borrow().len() == BITMAP_LENGTH as usize {
+impl<const N: usize> BitmapIndex<N>
+where
+    [(); N / 8 + 1]:,
+{
+    pub fn from_raw(bytes: RefCell<[u8; N / 8 + 1]>) -> Option<Self> {
+        if bytes.borrow().len() == { N / 8 + 1 } {
             Some(Self { bitmap: bytes })
         } else {
             None
@@ -28,19 +29,19 @@ impl BitmapIndex {
     }
 
     pub fn set(&mut self, index: u8) {
-        if index <= FLAG_SIZE.into() {
+        if index <= N as u8 {
             self.bitmap.borrow_mut()[(index / 8) as usize] |= 1 << (index % 8);
         }
     }
 
     pub fn unset(&mut self, index: u8) {
-        if index <= FLAG_SIZE.into() {
+        if index <= N as u8 {
             self.bitmap.borrow_mut()[(index / 8) as usize] &= 0 << (index % 8);
         }
     }
 
     pub fn is_set(&self, index: u8) -> bool {
-        if index <= FLAG_SIZE.into() {
+        if index <= N as u8 {
             self.bitmap.borrow()[(index / 8) as usize] & (1 << (index % 8)) != 0
         } else {
             false
@@ -53,7 +54,7 @@ impl BitmapIndex {
 
     /// Returns the number of unset bits.
     pub fn available(&self) -> u8 {
-        FLAG_SIZE - self.count()
+        N as u8 - self.count()
     }
 
     /// Returns the number of set bits.
@@ -90,8 +91,9 @@ mod tests {
 
     #[test]
     fn test_that_it_works() {
-        let array = RefCell::new([0; BITMAP_LENGTH as usize]);
-        let mut bitmap_index = BitmapIndex::from_raw(array).expect("Failed to build BitmapIndex");
+        let array = RefCell::new([0; 32]);
+        let mut bitmap_index: BitmapIndex<255> =
+            BitmapIndex::from_raw(array).expect("Failed to build BitmapIndex");
 
         assert_eq!(false, bitmap_index.is_set(0));
 
@@ -113,8 +115,9 @@ mod tests {
 
     #[test]
     fn test_that_unset_works() {
-        let array = RefCell::new([0; BITMAP_LENGTH as usize]);
-        let mut bitmap_index = BitmapIndex::from_raw(array).expect("Failed to build BitmapIndex");
+        let array = RefCell::new([0; 32]);
+        let mut bitmap_index: BitmapIndex<255> =
+            BitmapIndex::from_raw(array).expect("Failed to build BitmapIndex");
 
         assert_eq!(false, bitmap_index.is_set(0));
 
@@ -127,8 +130,9 @@ mod tests {
 
     #[test]
     fn test_returns_all_set_bit_indices() {
-        let array = RefCell::new([0; BITMAP_LENGTH as usize]);
-        let mut bitmap_index = BitmapIndex::from_raw(array).expect("Failed to build BitmapIndex");
+        let array = RefCell::new([0; 32]);
+        let mut bitmap_index: BitmapIndex<255> =
+            BitmapIndex::from_raw(array).expect("Failed to build BitmapIndex");
 
         assert!(bitmap_index.indices().is_empty());
 
@@ -144,8 +148,9 @@ mod tests {
 
     #[test]
     fn test_does_nothing_when_setting_the_same_bit_twice() {
-        let array = RefCell::new([0; BITMAP_LENGTH as usize]);
-        let mut bitmap_index = BitmapIndex::from_raw(array).expect("Failed to build BitmapIndex");
+        let array = RefCell::new([0; 32]);
+        let mut bitmap_index: BitmapIndex<255> =
+            BitmapIndex::from_raw(array).expect("Failed to build BitmapIndex");
         assert_eq!(false, bitmap_index.is_set(0));
 
         bitmap_index.set(0);
@@ -157,8 +162,9 @@ mod tests {
 
     #[test]
     fn test_consume_finds_available_slots_in_the_middle_of_the_index() {
-        let array = RefCell::new([0; BITMAP_LENGTH as usize]);
-        let mut bitmap_index = BitmapIndex::from_raw(array).expect("Failed to build BitmapIndex");
+        let array = RefCell::new([0; 32]);
+        let mut bitmap_index: BitmapIndex<255> =
+            BitmapIndex::from_raw(array).expect("Failed to build BitmapIndex");
         (0..=128).for_each(|index| {
             bitmap_index.set(index.into());
         });
@@ -172,8 +178,9 @@ mod tests {
 
     #[test]
     fn test_consume_return_available_value() {
-        let array = RefCell::new([0; BITMAP_LENGTH as usize]);
-        let mut bitmap_index = BitmapIndex::from_raw(array).expect("Failed to build BitmapIndex");
+        let array = RefCell::new([0; 32]);
+        let mut bitmap_index: BitmapIndex<255> =
+            BitmapIndex::from_raw(array).expect("Failed to build BitmapIndex");
 
         for _ in 0..=u8::MAX {
             assert!(bitmap_index.consume().is_some());
@@ -184,9 +191,10 @@ mod tests {
 
     #[test]
     fn test_from_raw_works() {
-        let raw_data = RefCell::new([0; BITMAP_LENGTH as usize]);
+        let raw_data = RefCell::new([0; 32]);
         raw_data.borrow_mut()[2] = 0xFF;
-        let bitmap_index = BitmapIndex::from_raw(raw_data).expect("Failed to load from bytes");
+        let bitmap_index: BitmapIndex<255> =
+            BitmapIndex::from_raw(raw_data).expect("Failed to load from bytes");
 
         assert_eq!(8, bitmap_index.count());
     }

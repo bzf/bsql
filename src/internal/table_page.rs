@@ -14,7 +14,7 @@ use super::{BitmapIndex, ColumnDefinition, DataType, InternalPage, Value};
 
 pub struct TablePage {
     column_definitions: Vec<ColumnDefinition>,
-    slots_index: BitmapIndex,
+    slots_index: BitmapIndex<255>,
 
     page: InternalPage,
 }
