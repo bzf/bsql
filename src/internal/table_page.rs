@@ -22,7 +22,7 @@ pub struct TablePage {
 impl TablePage {
     pub fn new(column_definitions: Vec<ColumnDefinition>) -> Self {
         let mut page = InternalPage::new();
-        let ref_cell: RefCell<[u8; 32]> = RefCell::new(page.metadadata[0..32].try_into().unwrap());
+        let ref_cell: RefCell<[u8; 32]> = RefCell::new(page.metadata[0..32].try_into().unwrap());
         let slots_index = BitmapIndex::from_raw(ref_cell).expect("Failed to build BitmapIndex");
 
         let column_definition_bytes: Vec<u8> = column_definitions
@@ -32,8 +32,8 @@ impl TablePage {
             .collect();
 
         // Store the length of the column definitions in the metadata page after the
-        page.metadadata[32..40].copy_from_slice(&column_definition_bytes.len().to_be_bytes());
-        page.metadadata[40..40 + column_definition_bytes.len()]
+        page.metadata[32..40].copy_from_slice(&column_definition_bytes.len().to_be_bytes());
+        page.metadata[40..40 + column_definition_bytes.len()]
             .copy_from_slice(&column_definition_bytes);
 
         Self {
