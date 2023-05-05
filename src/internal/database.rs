@@ -48,7 +48,7 @@ impl Database {
         if !self.table_exists(table_name) {
             let table_id = self.next_table_id;
 
-            let mut table_manager = TableManager::new(table_id);
+            let mut table_manager = TableManager::new();
             for (column_name, data_type) in columns.iter() {
                 table_manager.add_column(column_name, data_type.clone())?;
             }
@@ -307,7 +307,7 @@ mod tests {
 
     #[test]
     fn test_inserting_record_and_getting_it_back_out() {
-        let mut table_manager = TableManager::new(1);
+        let mut table_manager = TableManager::new();
         table_manager.add_column("day", DataType::Integer).unwrap();
 
         let record_id = table_manager

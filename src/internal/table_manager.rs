@@ -7,7 +7,6 @@ type ColumnId = u8;
 type LockedTablePage = Rc<RwLock<TablePage>>;
 
 pub struct TableManager {
-    table_id: u64,
     next_column_id: ColumnId,
 
     pages: Vec<LockedTablePage>,
@@ -18,9 +17,8 @@ pub struct TableManager {
 }
 
 impl TableManager {
-    pub fn new(table_id: u64) -> Self {
+    pub fn new() -> Self {
         Self {
-            table_id,
             next_column_id: 0,
 
             column_names: HashMap::new(),
@@ -222,7 +220,7 @@ mod tests {
 
     #[test]
     fn get_records_for_pages_with_different_columns() {
-        let mut table_manager = TableManager::new(1);
+        let mut table_manager = TableManager::new();
         table_manager.add_column("day", DataType::Integer).unwrap();
         assert!(table_manager
             .insert_record(vec![Value::Integer(31)])
@@ -253,7 +251,7 @@ mod tests {
 
     #[test]
     fn test_get_records_with_specific_columns() {
-        let mut table_manager = TableManager::new(1);
+        let mut table_manager = TableManager::new();
         table_manager.add_column("day", DataType::Integer).unwrap();
         assert!(table_manager
             .insert_record(vec![Value::Integer(13)])
@@ -288,7 +286,7 @@ mod tests {
 
     #[test]
     fn test_getting_a_single_record_works() {
-        let mut table_manager = TableManager::new(1);
+        let mut table_manager = TableManager::new();
         table_manager.add_column("day", DataType::Integer).unwrap();
 
         let record_id = table_manager
@@ -307,7 +305,7 @@ mod tests {
 
     #[test]
     fn test_get_records_with_specific_columns_with_invalid_columns() {
-        let mut table_manager = TableManager::new(1);
+        let mut table_manager = TableManager::new();
         table_manager.add_column("day", DataType::Integer).unwrap();
 
         assert_eq!(
