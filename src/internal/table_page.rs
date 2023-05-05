@@ -4,6 +4,8 @@ use super::{BitmapIndex, ColumnDefinition, DataType, InternalPage, Value};
 
 /// A `TablePage` is a struct that represents a full page of data + metadata of records (and their
 /// columns) that are stored in a table.
+/// A `TablePage` has a immutable header which consists of 32 bytes for the bitmap index (for knowing
+/// which free slots there are in the page) followed by the the serialized column definitions.
 
 /// The `TablePage` consists of two parts:
 /// - A `metadata_page` which stores information about which columns are present in the page, as
@@ -19,9 +21,20 @@ pub struct TablePage {
 
 impl TablePage {
     pub fn new(column_definitions: Vec<ColumnDefinition>) -> Self {
-        let page = InternalPage::new();
+        let mut page = InternalPage::new();
         let ref_cell: RefCell<[u8; 32]> = RefCell::new(page.metadadata[0..32].try_into().unwrap());
         let slots_index = BitmapIndex::from_raw(ref_cell).expect("Failed to build BitmapIndex");
+
+        let column_definition_bytes: Vec<u8> = column_definitions
+            .iter()
+            .map(|cd| cd.to_raw_bytes())
+            .flatten()
+            .collect();
+
+        // Store the length of the column definitions in the metadata page after the
+        page.metadadata[32..40].copy_from_slice(&column_definition_bytes.len().to_be_bytes());
+        page.metadadata[40..40 + column_definition_bytes.len()]
+            .copy_from_slice(&column_definition_bytes);
 
         Self {
             column_definitions,
