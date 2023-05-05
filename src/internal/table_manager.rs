@@ -287,6 +287,25 @@ mod tests {
     }
 
     #[test]
+    fn test_getting_a_single_record_works() {
+        let mut table_manager = TableManager::new(1);
+        table_manager.add_column("day", DataType::Integer).unwrap();
+
+        let record_id = table_manager
+            .insert_record(vec![Value::Integer(13)])
+            .expect("Failed to insert record");
+
+        let record = table_manager
+            .get_record(record_id)
+            .expect("Failed to fetch inserted record.");
+
+        assert_eq!(
+            &vec![Some(Value::Integer(13))],
+            record.rows().first().unwrap()
+        );
+    }
+
+    #[test]
     fn test_get_records_with_specific_columns_with_invalid_columns() {
         let mut table_manager = TableManager::new(1);
         table_manager.add_column("day", DataType::Integer).unwrap();
