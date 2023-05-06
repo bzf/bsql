@@ -1,12 +1,20 @@
-use super::{parse, ColumnDefinition, Command, DataType, Database, Error, QueryResult, Value};
+use super::{
+    parse, ColumnDefinition, Command, DataType, Database, Error, PageId, QueryResult, Value,
+};
 
 pub struct Manager {
+    _page_id: PageId,
+
     databases: Vec<Database>,
 }
 
 impl Manager {
     pub fn new() -> Self {
+        let mut page_manager = super::page_manager().write().unwrap();
+        let (_page_id, _shared_page) = page_manager.create_page();
+
         Self {
+            _page_id,
             databases: Vec::new(),
         }
     }
