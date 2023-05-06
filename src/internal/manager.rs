@@ -114,7 +114,7 @@ impl Manager {
     fn create_database(&mut self, name: &str) -> Result<QueryResult, Error> {
         if !self.database_definitions.contains_key(name) {
             self.database_definitions
-                .insert(name.to_string(), Database::new());
+                .insert(name.to_string(), Database::new(name));
 
             Ok(QueryResult::CommandSuccessMessage(
                 "CREATE DATABASE".to_string(),
