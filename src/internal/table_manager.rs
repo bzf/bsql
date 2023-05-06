@@ -28,9 +28,12 @@ impl TableManager {
         let (page_id, shared_page) = page_manager.create_page();
         let mut page = shared_page.write().unwrap();
 
-        let ref_cell: RefCell<[u8; 32]> =
-            RefCell::new(page.metadata[COLUMN_BITMAP_RANGE].try_into().unwrap());
-        let column_index = BitmapIndex::from_raw(ref_cell).expect("Failed to build BitmapIndex");
+        let column_index = {
+            let bytes = Rc::new(RefCell::new(
+                page.metadata[COLUMN_BITMAP_RANGE].try_into().unwrap(),
+            ));
+            BitmapIndex::from_raw(bytes).unwrap()
+        };
 
         page.metadata[COLUMN_TABLE_NAME_RANGE.start] = table_name.len() as u8;
         page.metadata[COLUMN_TABLE_NAME_RANGE.start + 1

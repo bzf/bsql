@@ -1,18 +1,19 @@
 use std::cell::RefCell;
+use std::rc::Rc;
 
 #[derive(Debug)]
 pub struct BitmapIndex<const N: usize>
 where
     [(); N / 8 + 1]:,
 {
-    bitmap: RefCell<[u8; N / 8 + 1]>,
+    bitmap: Rc<RefCell<[u8; N / 8 + 1]>>,
 }
 
 impl<const N: usize> BitmapIndex<N>
 where
     [(); N / 8 + 1]:,
 {
-    pub fn from_raw(bytes: RefCell<[u8; N / 8 + 1]>) -> Option<Self> {
+    pub fn from_raw(bytes: Rc<RefCell<[u8; N / 8 + 1]>>) -> Option<Self> {
         if bytes.borrow().len() == { N / 8 + 1 } {
             Some(Self { bitmap: bytes })
         } else {
@@ -91,7 +92,7 @@ mod tests {
 
     #[test]
     fn test_that_it_works() {
-        let array = RefCell::new([0; 32]);
+        let array = Rc::new(RefCell::new([0; 32]));
         let mut bitmap_index: BitmapIndex<255> =
             BitmapIndex::from_raw(array).expect("Failed to build BitmapIndex");
 
@@ -115,7 +116,7 @@ mod tests {
 
     #[test]
     fn test_that_unset_works() {
-        let array = RefCell::new([0; 32]);
+        let array = Rc::new(RefCell::new([0; 32]));
         let mut bitmap_index: BitmapIndex<255> =
             BitmapIndex::from_raw(array).expect("Failed to build BitmapIndex");
 
@@ -130,7 +131,7 @@ mod tests {
 
     #[test]
     fn test_returns_all_set_bit_indices() {
-        let array = RefCell::new([0; 32]);
+        let array = Rc::new(RefCell::new([0; 32]));
         let mut bitmap_index: BitmapIndex<255> =
             BitmapIndex::from_raw(array).expect("Failed to build BitmapIndex");
 
@@ -148,7 +149,7 @@ mod tests {
 
     #[test]
     fn test_does_nothing_when_setting_the_same_bit_twice() {
-        let array = RefCell::new([0; 32]);
+        let array = Rc::new(RefCell::new([0; 32]));
         let mut bitmap_index: BitmapIndex<255> =
             BitmapIndex::from_raw(array).expect("Failed to build BitmapIndex");
         assert_eq!(false, bitmap_index.is_set(0));
@@ -162,7 +163,7 @@ mod tests {
 
     #[test]
     fn test_consume_finds_available_slots_in_the_middle_of_the_index() {
-        let array = RefCell::new([0; 32]);
+        let array = Rc::new(RefCell::new([0; 32]));
         let mut bitmap_index: BitmapIndex<255> =
             BitmapIndex::from_raw(array).expect("Failed to build BitmapIndex");
         (0..=128).for_each(|index| {
@@ -178,7 +179,7 @@ mod tests {
 
     #[test]
     fn test_consume_return_available_value() {
-        let array = RefCell::new([0; 32]);
+        let array = Rc::new(RefCell::new([0; 32]));
         let mut bitmap_index: BitmapIndex<255> =
             BitmapIndex::from_raw(array).expect("Failed to build BitmapIndex");
 
@@ -191,11 +192,31 @@ mod tests {
 
     #[test]
     fn test_from_raw_works() {
-        let raw_data = RefCell::new([0; 32]);
+        let raw_data = Rc::new(RefCell::new([0; 32]));
         raw_data.borrow_mut()[2] = 0xFF;
         let bitmap_index: BitmapIndex<255> =
             BitmapIndex::from_raw(raw_data).expect("Failed to load from bytes");
 
         assert_eq!(8, bitmap_index.count());
+    }
+
+    #[test]
+    fn test_recreating_from_raw_works() {
+        let my_bigger_array = [0; 64];
+        let raw_data = Rc::new(RefCell::new(my_bigger_array[0..32].try_into().unwrap()));
+
+        {
+            let mut bitmap_index: BitmapIndex<255> =
+                BitmapIndex::from_raw(raw_data.clone()).expect("Failed to load from bytes");
+
+            bitmap_index.set(0);
+            assert_eq!(1, bitmap_index.count());
+        }
+
+        {
+            let bitmap_index: BitmapIndex<255> =
+                BitmapIndex::from_raw(raw_data).expect("Failed to load from bytes");
+            assert_eq!(1, bitmap_index.count());
+        }
     }
 }

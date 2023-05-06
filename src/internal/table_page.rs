@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::rc::Rc;
 
 use super::{BitmapIndex, ColumnDefinition, DataType, PageId, Value};
 
@@ -25,8 +26,10 @@ impl TablePage {
         let (page_id, shared_page) = page_manager.create_page();
         let mut page = shared_page.write().unwrap();
 
-        let ref_cell: RefCell<[u8; 32]> = RefCell::new(page.metadata[0..32].try_into().unwrap());
-        let slots_index = BitmapIndex::from_raw(ref_cell).expect("Failed to build BitmapIndex");
+        let slots_index: BitmapIndex<255> = {
+            let bytes = Rc::new(RefCell::new(page.metadata[0..32].try_into().unwrap()));
+            BitmapIndex::from_raw(bytes).unwrap()
+        };
 
         let column_definition_bytes: Vec<u8> = column_definitions
             .iter()
@@ -41,7 +44,6 @@ impl TablePage {
 
         Self {
             column_definitions,
-            // page,
             page_id,
             slots_index,
         }
