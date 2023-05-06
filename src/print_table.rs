@@ -1,4 +1,4 @@
-use crate::internal::RowResult;
+use bsql::RowResult;
 
 pub fn print_table(headers: Vec<&str>, items: Vec<Vec<impl std::fmt::Display>>) {
     // Calculate the maximum width of each column

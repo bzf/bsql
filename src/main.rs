@@ -3,14 +3,13 @@
 
 use std::io::Write;
 
-mod internal;
 mod print_table;
 
-use internal::{ColumnDefinition, Error, QueryResult};
+use bsql::{ColumnDefinition, Error, Manager, QueryResult};
 use print_table::{print_row_result, print_table};
 
 fn main() {
-    let mut database_manager = internal::Manager::new();
+    let mut database_manager = Manager::new();
     let mut active_database: Option<String> = None;
 
     loop {
