@@ -1,28 +1,48 @@
-use super::{ColumnDefinition, DataType, Error, RowResult, TableManager, Value};
+use super::{ColumnDefinition, DataType, Error, PageId, RowResult, TableManager, Value};
 
 type TableId = u64;
 
 pub struct Database {
-    name: String,
+    page_id: PageId,
+
     table_managers: Vec<TableManager>,
     next_table_id: TableId,
 }
 
 impl Database {
     pub fn new(name: &str) -> Result<Self, Error> {
+        let mut page_manager = super::page_manager().write().unwrap();
+        let (page_id, shared_page) = page_manager.create_page();
+        let mut page = shared_page.write().unwrap();
+
         if name.len() >= 63 {
             return Err(Error::DatabaseNameTooLong);
         }
 
+        let name_length = name.len();
+        page.metadata[0] = name_length as u8;
+        page.metadata[1..name_length + 1].copy_from_slice(name.as_bytes());
+
         Ok(Self {
-            name: name.to_string(),
+            page_id,
+
             table_managers: Vec::new(),
             next_table_id: 0,
         })
     }
 
-    pub fn name(&self) -> &str {
-        &self.name
+    pub fn name(&self) -> String {
+        let page_manager = super::page_manager().write().ok().unwrap();
+        let page = page_manager
+            .fetch_page(self.page_id)
+            .unwrap()
+            .read()
+            .ok()
+            .unwrap();
+
+        let name_length = page.metadata[0] as usize;
+        let name_bytes = &page.metadata[1..name_length + 1];
+        String::from_utf8(name_bytes.to_vec()).unwrap()
     }
 
     pub fn table_names(&self) -> Vec<String> {
