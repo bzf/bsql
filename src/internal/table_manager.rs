@@ -1,8 +1,6 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc, sync::RwLock};
 
-use super::{
-    BitmapIndex, ColumnDefinition, DataType, Error, InternalPage, RowResult, TablePage, Value,
-};
+use super::{BitmapIndex, ColumnDefinition, DataType, Error, PageId, RowResult, TablePage, Value};
 
 type ColumnId = u8;
 
@@ -15,38 +13,49 @@ pub struct TableManager {
     pages: Vec<LockedTablePage>,
     column_pages: HashMap<Vec<ColumnId>, Vec<LockedTablePage>>,
 
-    page: InternalPage,
+    page_id: PageId,
     column_index: BitmapIndex<255>,
 }
 
 impl TableManager {
     pub fn new() -> Self {
-        let page = InternalPage::new();
+        let mut page_manager = super::page_manager().write().unwrap();
+        let (page_id, shared_page) = page_manager.create_page();
+        let page = shared_page.write().unwrap();
+
         let ref_cell: RefCell<[u8; 32]> =
             RefCell::new(page.metadata[COLUMN_BITMAP_RANGE].try_into().unwrap());
         let column_index = BitmapIndex::from_raw(ref_cell).expect("Failed to build BitmapIndex");
 
         Self {
-            page,
-            column_index,
-
             pages: Vec::new(),
             column_pages: HashMap::new(),
+
+            page_id,
+            column_index,
         }
     }
 
     pub fn column_definitions(&self) -> Vec<ColumnDefinition> {
+        let page_manager = super::page_manager().write().ok().unwrap();
+        let page = page_manager
+            .fetch_page(self.page_id)
+            .unwrap()
+            .read()
+            .ok()
+            .unwrap();
+
         let mut column_definitions = Vec::new();
-        let number_of_columns: u8 = self.page.metadata[COLUMN_DEFINITION_START_OFFSET];
+        let number_of_columns: u8 = page.metadata[COLUMN_DEFINITION_START_OFFSET];
 
         let mut start_cursor = COLUMN_DEFINITION_START_OFFSET + 1;
 
         for _ in 0..number_of_columns {
-            let column_size_in_bytes: u8 = self.page.metadata[start_cursor];
+            let column_size_in_bytes: u8 = page.metadata[start_cursor];
             start_cursor += 1;
 
             let column_definition_bytes: &[u8] =
-                &self.page.metadata[start_cursor..start_cursor + (column_size_in_bytes as usize)];
+                &page.metadata[start_cursor..start_cursor + (column_size_in_bytes as usize)];
 
             start_cursor += column_size_in_bytes as usize;
 
@@ -247,7 +256,7 @@ impl TableManager {
             .collect()
     }
 
-    fn write_metadata_page(&mut self, column_definitions: &Vec<ColumnDefinition>) {
+    fn write_metadata_page(&self, column_definitions: &Vec<ColumnDefinition>) {
         let mut column_definition_data: Vec<u8> = Vec::new();
 
         column_definition_data.push(column_definitions.len() as u8);
@@ -260,7 +269,15 @@ impl TableManager {
         let mut metadata: Vec<u8> = Vec::with_capacity(column_definition_data.len());
         metadata.extend_from_slice(&column_definition_data);
 
-        self.page.metadata
+        let page_manager = super::page_manager().write().ok().unwrap();
+        let mut page = page_manager
+            .fetch_page(self.page_id)
+            .unwrap()
+            .write()
+            .ok()
+            .unwrap();
+
+        page.metadata
             [COLUMN_DEFINITION_START_OFFSET..COLUMN_DEFINITION_START_OFFSET + metadata.len()]
             .copy_from_slice(&metadata);
     }

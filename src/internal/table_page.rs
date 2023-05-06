@@ -1,6 +1,6 @@
 use std::cell::RefCell;
 
-use super::{BitmapIndex, ColumnDefinition, DataType, InternalPage, Value};
+use super::{BitmapIndex, ColumnDefinition, DataType, PageId, Value};
 
 /// A `TablePage` is a struct that represents a full page of data + metadata of records (and their
 /// columns) that are stored in a table.
@@ -16,12 +16,15 @@ pub struct TablePage {
     column_definitions: Vec<ColumnDefinition>,
     slots_index: BitmapIndex<255>,
 
-    page: InternalPage,
+    page_id: PageId,
 }
 
 impl TablePage {
     pub fn new(column_definitions: Vec<ColumnDefinition>) -> Self {
-        let mut page = InternalPage::new();
+        let mut page_manager = super::page_manager().write().unwrap();
+        let (page_id, shared_page) = page_manager.create_page();
+        let mut page = shared_page.write().unwrap();
+
         let ref_cell: RefCell<[u8; 32]> = RefCell::new(page.metadata[0..32].try_into().unwrap());
         let slots_index = BitmapIndex::from_raw(ref_cell).expect("Failed to build BitmapIndex");
 
@@ -38,7 +41,8 @@ impl TablePage {
 
         Self {
             column_definitions,
-            page,
+            // page,
+            page_id,
             slots_index,
         }
     }
@@ -47,6 +51,9 @@ impl TablePage {
     /// relative index of the record in the page.
     /// Return `None` when the page is full.
     pub fn insert_record(&mut self, record_data: Vec<Value>) -> Option<u8> {
+        let page_manager = super::page_manager().write().ok()?;
+        let mut page = page_manager.fetch_page(self.page_id)?.write().ok()?;
+
         if record_data.len() != self.column_definitions.len() {
             return None;
         }
@@ -60,7 +67,7 @@ impl TablePage {
 
         let record_size: usize = self.record_size() as usize;
         let start_index: usize = (record_index as usize * record_size) as usize;
-        self.page.data[start_index..(start_index + record_size)].copy_from_slice(&record_data);
+        page.data[start_index..(start_index + record_size)].copy_from_slice(&record_data);
 
         Some(record_index)
     }
@@ -80,9 +87,12 @@ impl TablePage {
             return None;
         }
 
+        let page_manager = super::page_manager().read().ok()?;
+        let page = page_manager.fetch_page(self.page_id)?.read().ok()?;
+
         let start_index: usize = (record_index as usize) * (self.record_size() as usize);
         let end_index: usize = start_index + self.record_size() as usize;
-        let record_data = self.page.data.get(start_index..end_index)?;
+        let record_data = page.data.get(start_index..end_index)?;
 
         let mut value_offset: usize = 0;
         let mut values = vec![];

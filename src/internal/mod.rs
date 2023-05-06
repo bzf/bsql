@@ -5,6 +5,7 @@ mod database;
 mod error;
 mod manager;
 mod page;
+mod page_manager;
 mod parser;
 mod query_result;
 mod row_result;
@@ -15,6 +16,7 @@ mod value;
 use bitmap_index::BitmapIndex;
 use database::Database;
 use page::InternalPage;
+use page_manager::{page_manager, PageId};
 use table_manager::TableManager;
 use table_page::TablePage;
 
