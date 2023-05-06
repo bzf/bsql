@@ -6,6 +6,8 @@ type ColumnId = u8;
 
 type LockedTablePage = Rc<RwLock<TablePage>>;
 
+const COLUMN_DEFINITION_START_OFFSET: usize = 0;
+
 pub struct TableManager {
     next_column_id: ColumnId,
 
@@ -29,9 +31,9 @@ impl TableManager {
 
     pub fn column_definitions(&self) -> Vec<ColumnDefinition> {
         let mut column_definitions = Vec::new();
-        let number_of_columns: u8 = self.page.metadata[4];
+        let number_of_columns: u8 = self.page.metadata[COLUMN_DEFINITION_START_OFFSET];
 
-        let mut start_cursor = 5;
+        let mut start_cursor = COLUMN_DEFINITION_START_OFFSET + 1;
 
         for _ in 0..number_of_columns {
             let column_size_in_bytes: u8 = self.page.metadata[start_cursor];
@@ -249,11 +251,12 @@ impl TableManager {
         }
 
         // Add the total column definition size as the first 4 bytes
-        let mut metadata: Vec<u8> = Vec::with_capacity(4 + column_definition_data.len());
-        metadata.extend_from_slice(&(column_definition_data.len() as u32).to_le_bytes());
+        let mut metadata: Vec<u8> = Vec::with_capacity(column_definition_data.len());
         metadata.extend_from_slice(&column_definition_data);
 
-        self.page.metadata[0..metadata.len()].copy_from_slice(&metadata);
+        self.page.metadata
+            [COLUMN_DEFINITION_START_OFFSET..COLUMN_DEFINITION_START_OFFSET + metadata.len()]
+            .copy_from_slice(&metadata);
     }
 }
 
