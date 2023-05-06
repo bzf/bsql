@@ -1,28 +1,34 @@
-use std::{collections::HashMap, rc::Rc, sync::RwLock};
+use std::{cell::RefCell, collections::HashMap, rc::Rc, sync::RwLock};
 
-use super::{ColumnDefinition, DataType, Error, InternalPage, RowResult, TablePage, Value};
+use super::{
+    BitmapIndex, ColumnDefinition, DataType, Error, InternalPage, RowResult, TablePage, Value,
+};
 
 type ColumnId = u8;
 
 type LockedTablePage = Rc<RwLock<TablePage>>;
 
-const COLUMN_DEFINITION_START_OFFSET: usize = 0;
+const COLUMN_BITMAP_RANGE: std::ops::Range<usize> = 0..32;
+const COLUMN_DEFINITION_START_OFFSET: usize = 32;
 
 pub struct TableManager {
-    next_column_id: ColumnId,
-
     pages: Vec<LockedTablePage>,
     column_pages: HashMap<Vec<ColumnId>, Vec<LockedTablePage>>,
 
     page: InternalPage,
+    column_index: BitmapIndex<255>,
 }
 
 impl TableManager {
     pub fn new() -> Self {
-        Self {
-            next_column_id: 0,
+        let page = InternalPage::new();
+        let ref_cell: RefCell<[u8; 32]> =
+            RefCell::new(page.metadata[COLUMN_BITMAP_RANGE].try_into().unwrap());
+        let column_index = BitmapIndex::from_raw(ref_cell).expect("Failed to build BitmapIndex");
 
-            page: InternalPage::new(),
+        Self {
+            page,
+            column_index,
 
             pages: Vec::new(),
             column_pages: HashMap::new(),
@@ -59,14 +65,14 @@ impl TableManager {
 
         if !self.column_exists(column_name) {
             column_definitions.push(ColumnDefinition::new(
-                self.next_column_id as u8,
+                self.column_index
+                    .consume()
+                    .ok_or(Error::TooManyColumnsInUse)?,
                 data_type,
                 column_name.to_string(),
             ));
 
             self.write_metadata_page(&column_definitions);
-
-            self.next_column_id += 1;
 
             Ok(())
         } else {

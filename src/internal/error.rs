@@ -11,5 +11,6 @@ pub enum Error {
     TableAlreadyExists(String),
     ColumnDoesNotExist(String),
     ColumnAlreadyExist(String),
+    TooManyColumnsInUse,
     InsertFailed,
 }
