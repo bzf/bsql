@@ -15,4 +15,5 @@ pub enum Error {
     InsertFailed,
 
     TableNameTooLong,
+    DatabaseNameTooLong,
 }

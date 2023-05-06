@@ -9,12 +9,16 @@ pub struct Database {
 }
 
 impl Database {
-    pub fn new(name: &str) -> Self {
-        Self {
+    pub fn new(name: &str) -> Result<Self, Error> {
+        if name.len() >= 63 {
+            return Err(Error::DatabaseNameTooLong);
+        }
+
+        Ok(Self {
             name: name.to_string(),
             table_managers: Vec::new(),
             next_table_id: 0,
-        }
+        })
     }
 
     pub fn table_names(&self) -> Vec<String> {
@@ -116,7 +120,7 @@ mod tests {
 
     #[test]
     fn test_creating_new_table_without_columns() {
-        let mut database = Database::new("test");
+        let mut database = Database::new("test").unwrap();
 
         let result = database.create_table("foobar", vec![]);
 
@@ -125,7 +129,7 @@ mod tests {
 
     #[test]
     fn test_creating_new_table_with_columns() {
-        let mut database = Database::new("test");
+        let mut database = Database::new("test").unwrap();
 
         let result =
             database.create_table("foobar", vec![("hello".to_string(), DataType::Integer)]);
@@ -135,7 +139,7 @@ mod tests {
 
     #[test]
     fn test_creating_table_that_already_exists() {
-        let mut database = Database::new("test");
+        let mut database = Database::new("test").unwrap();
         let table_name = "new_database";
         assert!(database.create_table(table_name, vec![]).is_ok());
 
@@ -149,7 +153,7 @@ mod tests {
 
     #[test]
     fn test_adding_column_to_table() {
-        let mut database = Database::new("test");
+        let mut database = Database::new("test").unwrap();
         let table_name = "new_database";
         assert!(database.create_table(table_name, vec![]).is_ok());
 
@@ -160,7 +164,7 @@ mod tests {
 
     #[test]
     fn inserting_row_to_a_table() {
-        let mut database = Database::new("test");
+        let mut database = Database::new("test").unwrap();
         let table_name = "new_table";
         assert!(database
             .create_table(table_name, vec![("age".to_string(), DataType::Integer)])
@@ -173,7 +177,7 @@ mod tests {
 
     #[test]
     fn inserting_row_with_different_len_values() {
-        let mut database = Database::new("test");
+        let mut database = Database::new("test").unwrap();
         let table_name = "new_table";
         assert!(database
             .create_table(table_name, vec![("age".to_string(), DataType::Integer)])
@@ -186,7 +190,7 @@ mod tests {
 
     #[test]
     fn select_all_from_table() {
-        let mut database = Database::new("test");
+        let mut database = Database::new("test").unwrap();
         let table_name = "new_table";
         assert!(database
             .create_table(table_name, vec![("age".to_string(), DataType::Integer)])
@@ -205,7 +209,7 @@ mod tests {
 
     #[test]
     fn select_all_from_table_with_different_columns_over_time() {
-        let mut database = Database::new("test");
+        let mut database = Database::new("test").unwrap();
         let table_name = "new_table";
         assert!(database
             .create_table(table_name, vec![("age".to_string(), DataType::Integer)])
@@ -233,7 +237,7 @@ mod tests {
 
     #[test]
     fn select_all_from_empty_table() {
-        let mut database = Database::new("test");
+        let mut database = Database::new("test").unwrap();
         let table_name = "new_table";
         assert!(database.create_table(table_name, vec![]).is_ok());
 
@@ -247,7 +251,7 @@ mod tests {
 
     #[test]
     fn select_from_table() {
-        let mut database = Database::new("test");
+        let mut database = Database::new("test").unwrap();
         let table_name = "new_table";
         assert!(database
             .create_table(
@@ -272,7 +276,7 @@ mod tests {
 
     #[test]
     fn select_with_column_that_doesnt_exist() {
-        let mut database = Database::new("test");
+        let mut database = Database::new("test").unwrap();
         let table_name = "new_table";
         assert!(database.create_table(table_name, vec![]).is_ok());
 
