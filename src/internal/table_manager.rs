@@ -12,7 +12,6 @@ pub struct TableManager {
     pages: Vec<LockedTablePage>,
     column_pages: HashMap<Vec<ColumnId>, Vec<LockedTablePage>>,
 
-    column_names: HashMap<String, ColumnId>,
     column_definitions: Vec<ColumnDefinition>,
 }
 
@@ -21,7 +20,6 @@ impl TableManager {
         Self {
             next_column_id: 0,
 
-            column_names: HashMap::new(),
             column_definitions: Vec::new(),
 
             pages: Vec::new(),
@@ -29,29 +27,19 @@ impl TableManager {
         }
     }
 
-    pub fn column_definitions(&self) -> Vec<(String, ColumnDefinition)> {
-        self.column_names
-            .iter()
-            .map(|(column_name, column_id)| {
-                (
-                    column_name.to_string(),
-                    self.column_definitions
-                        .get(*column_id as usize)
-                        .unwrap()
-                        .clone(),
-                )
-            })
-            .collect()
+    pub fn column_definitions(&self) -> &Vec<ColumnDefinition> {
+        &self.column_definitions
     }
 
     pub fn add_column(&mut self, column_name: &str, data_type: DataType) -> Result<(), Error> {
         println!("table_manager.add_column {} {:?}", column_name, data_type);
 
-        if !self.column_names.contains_key(column_name) {
-            self.column_names
-                .insert(column_name.to_string(), self.next_column_id as u8);
-            self.column_definitions
-                .push(ColumnDefinition::new(self.next_column_id as u8, data_type));
+        if !self.column_exists(column_name) {
+            self.column_definitions.push(ColumnDefinition::new(
+                self.next_column_id as u8,
+                data_type,
+                column_name.to_string(),
+            ));
 
             self.next_column_id += 1;
 
@@ -86,10 +74,7 @@ impl TableManager {
             .get_record(record_slot as u8)
             .map(|record| self.normalize_page_record(&page_columns, record))?;
 
-        Some(RowResult::new(
-            self.column_names.keys().cloned().collect(),
-            vec![row_data],
-        ))
+        Some(RowResult::new(self.column_names(), vec![row_data]))
     }
 
     pub fn get_records(&self) -> RowResult {
@@ -108,17 +93,18 @@ impl TableManager {
             }
         }
 
-        RowResult::new(self.column_names.keys().cloned().collect(), rows)
+        RowResult::new(self.column_names(), rows)
     }
 
     pub fn get_records_for_columns(&self, column_names: &Vec<&str>) -> Result<RowResult, Error> {
         let sorted_column_indices: Vec<ColumnId> = column_names
             .into_iter()
             .map(|column_name| {
-                self.column_names
-                    .get(*column_name)
+                self.column_definitions
+                    .iter()
+                    .find(|cd| cd.name() == column_name)
                     .ok_or(Error::ColumnDoesNotExist(column_name.to_string()))
-                    .map(|column_id| *column_id)
+                    .map(|cd| cd.column_id())
             })
             .collect::<Result<Vec<ColumnId>, Error>>()?;
 
@@ -211,6 +197,20 @@ impl TableManager {
                 value_index.and_then(|index| page_record.get(index as usize).map(|i| i.clone()))
             })
             .collect();
+    }
+
+    fn column_exists(&self, column_name: &str) -> bool {
+        self.column_definitions
+            .iter()
+            .find(|cd| cd.name() == column_name)
+            .is_some()
+    }
+
+    fn column_names(&self) -> Vec<String> {
+        self.column_definitions
+            .iter()
+            .map(|cd| cd.name().clone())
+            .collect()
     }
 }
 

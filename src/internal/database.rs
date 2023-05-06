@@ -25,10 +25,7 @@ impl Database {
         self.table_names.keys().cloned().collect()
     }
 
-    pub fn column_definitions(
-        &self,
-        table_name: &str,
-    ) -> Result<Vec<(String, ColumnDefinition)>, Error> {
+    pub fn column_definitions(&self, table_name: &str) -> Result<&Vec<ColumnDefinition>, Error> {
         let table_id = self
             .table_names
             .get(table_name)

@@ -91,12 +91,17 @@ fn print_tables(table_names: Vec<String>) {
     );
 }
 
-fn print_table_definition(column_definitions: Vec<(String, ColumnDefinition)>) {
+fn print_table_definition(column_definitions: &Vec<ColumnDefinition>) {
     print_table(
         vec!["Column name", "Data type"],
         column_definitions
             .into_iter()
-            .map(|(column_name, definition)| vec![column_name, definition.data_type().to_string()])
+            .map(|definition| {
+                vec![
+                    definition.name().clone(),
+                    definition.data_type().to_string(),
+                ]
+            })
             .collect(),
     );
 }

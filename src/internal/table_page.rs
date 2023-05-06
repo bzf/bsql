@@ -152,7 +152,7 @@ mod tests {
 
     #[test]
     fn test_inserting_and_reading_record_with_one_column() {
-        let column_definition = ColumnDefinition::new(1, DataType::Integer);
+        let column_definition = ColumnDefinition::new(1, DataType::Integer, "day".to_string());
         let mut table_page = TablePage::new(vec![column_definition.clone()]);
 
         let record_id = table_page.insert_record(vec![Value::Integer(3)]);
@@ -168,8 +168,8 @@ mod tests {
     #[test]
     fn test_inserting_and_reading_record_with_multiple_columns() {
         let mut table_page = TablePage::new(vec![
-            ColumnDefinition::new(1, DataType::Integer),
-            ColumnDefinition::new(2, DataType::Integer),
+            ColumnDefinition::new(1, DataType::Integer, "day".to_string()),
+            ColumnDefinition::new(2, DataType::Integer, "month".to_string()),
         ]);
 
         let record_id = table_page.insert_record(vec![Value::Integer(3), Value::Integer(5)]);
@@ -187,7 +187,7 @@ mod tests {
 
     #[test]
     fn test_inserting_record_when_the_page_is_full() {
-        let column_definition = ColumnDefinition::new(1, DataType::Integer);
+        let column_definition = ColumnDefinition::new(1, DataType::Integer, "day".to_string());
 
         let mut table_page = TablePage::new(vec![column_definition.clone()]);
         for _ in 0..=u8::MAX {
@@ -202,7 +202,7 @@ mod tests {
 
     #[test]
     fn test_inserting_record_with_other_column_definitions() {
-        let column_definition = ColumnDefinition::new(1, DataType::Integer);
+        let column_definition = ColumnDefinition::new(1, DataType::Integer, "day".to_string());
         let mut table_page = TablePage::new(vec![column_definition.clone()]);
 
         let record_id = table_page.insert_record(vec![Value::Integer(3), Value::Integer(1)]);
@@ -211,7 +211,11 @@ mod tests {
 
     #[test]
     fn test_inserting_and_deleting_record() {
-        let mut table_page = TablePage::new(vec![ColumnDefinition::new(1, DataType::Integer)]);
+        let mut table_page = TablePage::new(vec![ColumnDefinition::new(
+            1,
+            DataType::Integer,
+            "day".to_string(),
+        )]);
 
         let record_id = table_page.insert_record(vec![Value::Integer(3)]);
         assert!(record_id.is_some());
@@ -224,14 +228,18 @@ mod tests {
     #[test]
     fn test_record_size() {
         {
-            let table_page = TablePage::new(vec![ColumnDefinition::new(1, DataType::Integer)]);
+            let table_page = TablePage::new(vec![ColumnDefinition::new(
+                1,
+                DataType::Integer,
+                "day".to_string(),
+            )]);
             assert_eq!(1, table_page.record_size());
         }
 
         {
             let table_page = TablePage::new(vec![
-                ColumnDefinition::new(1, DataType::Integer),
-                ColumnDefinition::new(2, DataType::Integer),
+                ColumnDefinition::new(1, DataType::Integer, "day".to_string()),
+                ColumnDefinition::new(2, DataType::Integer, "month".to_string()),
             ]);
 
             assert_eq!(2, table_page.record_size());
@@ -241,8 +249,8 @@ mod tests {
     #[test]
     fn test_serialize_page_header() {
         let table_page = TablePage::new(vec![
-            ColumnDefinition::new(23, DataType::Integer),
-            ColumnDefinition::new(11, DataType::Integer),
+            ColumnDefinition::new(23, DataType::Integer, "day".to_string()),
+            ColumnDefinition::new(11, DataType::Integer, "month".to_string()),
         ]);
 
         let page_header = table_page.serialize_page_header();
