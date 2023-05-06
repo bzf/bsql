@@ -10,21 +10,16 @@ use print_table::{print_row_result, print_table};
 
 fn main() {
     let mut database_manager = Manager::new();
-    let mut active_database: Option<String> = None;
+    let mut active_database = String::new();
 
     loop {
-        let expression = if let Some(database_name) = &active_database {
-            prompt(&format!("{}> ", database_name))
-        } else {
-            prompt("> ")
-        };
-
+        let expression = prompt(&format!("{}> ", active_database));
         let command_parts: Vec<&str> = expression.split(" ").collect();
 
         match &command_parts[..] {
             ["\\c", database_name] => {
                 if database_manager.database_exists(database_name) {
-                    active_database = Some(database_name.to_string());
+                    active_database = database_name.to_string();
                     println!("You are now connected to database \"{}\".", database_name);
                 } else {
                     println!("FATAL: database \"{}\" does not exist", database_name);
@@ -34,25 +29,13 @@ fn main() {
             ["\\l"] => print_databases(database_manager.database_names()),
             ["\\list"] => print_databases(database_manager.database_names()),
 
-            ["\\dt"] => {
-                let Some(database_name) = &active_database else {
-                    println!("FATAL: No active database selected.");
-                    continue;
-                };
-
-                match database_manager.database_table_names(&database_name) {
-                    Ok(table_names) => print_tables(table_names),
-                    Err(error) => print_error(&error),
-                }
-            }
+            ["\\dt"] => match database_manager.database_table_names(&active_database) {
+                Ok(table_names) => print_tables(table_names),
+                Err(error) => print_error(&error),
+            },
 
             ["\\d+", table_name] => {
-                let Some(database_name) = &active_database else {
-                    println!("FATAL: No active database selected.");
-                    continue;
-                };
-
-                match database_manager.table_definition(database_name, table_name) {
+                match database_manager.table_definition(&active_database, table_name) {
                     Ok(table_definition) => print_table_definition(&table_definition),
                     Err(error) => print_error(&error),
                 }
@@ -62,16 +45,10 @@ fn main() {
                 break;
             }
 
-            _ => {
-                if let Some(ref database_name) = active_database {
-                    match database_manager.execute(&database_name, &expression) {
-                        Ok(query_result) => print_query_result(&query_result),
-                        Err(error) => print_error(&error),
-                    }
-                } else {
-                    eprintln!("FATAL: No active database selected.");
-                }
-            }
+            _ => match database_manager.execute(&active_database, &expression) {
+                Ok(query_result) => print_query_result(&query_result),
+                Err(error) => print_error(&error),
+            },
         }
     }
 }
