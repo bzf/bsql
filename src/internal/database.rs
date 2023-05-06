@@ -21,6 +21,10 @@ impl Database {
         })
     }
 
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
     pub fn table_names(&self) -> Vec<String> {
         self.table_managers
             .iter()

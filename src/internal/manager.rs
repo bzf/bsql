@@ -1,15 +1,13 @@
-use std::collections::HashMap;
-
 use super::{parse, ColumnDefinition, Command, DataType, Database, Error, QueryResult, Value};
 
 pub struct Manager {
-    database_definitions: HashMap<String, Database>,
+    databases: Vec<Database>,
 }
 
 impl Manager {
     pub fn new() -> Self {
         Self {
-            database_definitions: HashMap::new(),
+            databases: Vec::new(),
         }
     }
 
@@ -54,12 +52,16 @@ impl Manager {
     }
 
     pub fn database_names(&self) -> Vec<String> {
-        self.database_definitions.keys().cloned().collect()
+        self.databases
+            .iter()
+            .map(|d| d.name().to_string())
+            .collect()
     }
 
     pub fn database_table_names(&self, database_name: &str) -> Result<Vec<String>, Error> {
-        self.database_definitions
-            .get(database_name)
+        self.databases
+            .iter()
+            .find(|d| d.name() == database_name)
             .ok_or(Error::DatabaseDoesNotExist(database_name.to_string()))
             .map(|database| database.table_names())
     }
@@ -69,14 +71,15 @@ impl Manager {
         database_name: &str,
         table_name: &str,
     ) -> Result<Vec<ColumnDefinition>, Error> {
-        self.database_definitions
-            .get(database_name)
+        self.databases
+            .iter()
+            .find(|d| d.name() == database_name)
             .ok_or(Error::DatabaseDoesNotExist(database_name.to_string()))
             .and_then(|database| database.column_definitions(table_name))
     }
 
     pub fn database_exists(&self, key: &str) -> bool {
-        self.database_definitions.contains_key(key)
+        self.databases.iter().find(|d| d.name() == key).is_some()
     }
 
     fn create_table(
@@ -85,7 +88,7 @@ impl Manager {
         table_name: &str,
         columns: Vec<(String, DataType)>,
     ) -> Result<QueryResult, Error> {
-        let Some(database) = self.database_definitions.get_mut(database_name) else {
+        let Some(database) = self.databases.iter_mut().find(|d| d.name() == database_name) else {
             return Err(Error::DatabaseDoesNotExist(database_name.to_string()));
         };
 
@@ -102,8 +105,9 @@ impl Manager {
         data_type: DataType,
     ) -> Result<QueryResult, Error> {
         let database = self
-            .database_definitions
-            .get_mut(database_name)
+            .databases
+            .iter_mut()
+            .find(|d| d.name() == database_name)
             .ok_or(Error::DatabaseDoesNotExist(database_name.to_string()))?;
 
         database
@@ -112,9 +116,8 @@ impl Manager {
     }
 
     fn create_database(&mut self, name: &str) -> Result<QueryResult, Error> {
-        if !self.database_definitions.contains_key(name) {
-            self.database_definitions
-                .insert(name.to_string(), Database::new(name)?);
+        if !self.database_exists(name) {
+            self.databases.push(Database::new(name)?);
 
             Ok(QueryResult::CommandSuccessMessage(
                 "CREATE DATABASE".to_string(),
@@ -131,8 +134,9 @@ impl Manager {
         values: Vec<Value>,
     ) -> Result<QueryResult, Error> {
         let database = self
-            .database_definitions
-            .get_mut(database_name)
+            .databases
+            .iter_mut()
+            .find(|d| d.name() == database_name)
             .ok_or(Error::DatabaseDoesNotExist(database_name.to_string()))?;
 
         database
@@ -142,8 +146,9 @@ impl Manager {
 
     fn select_all(&self, database_name: &str, table_name: &str) -> Result<QueryResult, Error> {
         let database = self
-            .database_definitions
-            .get(database_name)
+            .databases
+            .iter()
+            .find(|d| d.name() == database_name)
             .ok_or(Error::DatabaseDoesNotExist(database_name.to_string()))?;
 
         return Ok(QueryResult::RowResult(
@@ -158,8 +163,9 @@ impl Manager {
         columns: Vec<String>,
     ) -> Result<QueryResult, Error> {
         let database = self
-            .database_definitions
-            .get(database_name)
+            .databases
+            .iter()
+            .find(|d| d.name() == database_name)
             .ok_or(Error::DatabaseDoesNotExist(database_name.to_string()))?;
 
         return database
