@@ -68,7 +68,7 @@ impl Manager {
         &self,
         database_name: &str,
         table_name: &str,
-    ) -> Result<&Vec<ColumnDefinition>, Error> {
+    ) -> Result<Vec<ColumnDefinition>, Error> {
         self.database_definitions
             .get(database_name)
             .ok_or(Error::DatabaseDoesNotExist(database_name.to_string()))

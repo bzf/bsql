@@ -54,7 +54,7 @@ fn main() {
                 };
 
                 match database_manager.table_definition(database_name, table_name) {
-                    Ok(table_definition) => print_table_definition(table_definition),
+                    Ok(table_definition) => print_table_definition(&table_definition),
                     Err(error) => print_error(&error),
                 }
             }

@@ -1,6 +1,6 @@
 use std::{collections::HashMap, rc::Rc, sync::RwLock};
 
-use super::{ColumnDefinition, DataType, Error, RowResult, TablePage, Value};
+use super::{ColumnDefinition, DataType, Error, InternalPage, RowResult, TablePage, Value};
 
 type ColumnId = u8;
 
@@ -12,7 +12,7 @@ pub struct TableManager {
     pages: Vec<LockedTablePage>,
     column_pages: HashMap<Vec<ColumnId>, Vec<LockedTablePage>>,
 
-    column_definitions: Vec<ColumnDefinition>,
+    page: InternalPage,
 }
 
 impl TableManager {
@@ -20,26 +20,49 @@ impl TableManager {
         Self {
             next_column_id: 0,
 
-            column_definitions: Vec::new(),
+            page: InternalPage::new(),
 
             pages: Vec::new(),
             column_pages: HashMap::new(),
         }
     }
 
-    pub fn column_definitions(&self) -> &Vec<ColumnDefinition> {
-        &self.column_definitions
+    pub fn column_definitions(&self) -> Vec<ColumnDefinition> {
+        let mut column_definitions = Vec::new();
+        let number_of_columns: u8 = self.page.metadata[4];
+
+        let mut start_cursor = 5;
+
+        for _ in 0..number_of_columns {
+            let column_size_in_bytes: u8 = self.page.metadata[start_cursor];
+            start_cursor += 1;
+
+            let column_definition_bytes: &[u8] =
+                &self.page.metadata[start_cursor..start_cursor + (column_size_in_bytes as usize)];
+
+            start_cursor += column_size_in_bytes as usize;
+
+            let column_definition =
+                ColumnDefinition::from_raw_bytes(column_definition_bytes).unwrap();
+
+            column_definitions.push(column_definition);
+        }
+
+        return column_definitions;
     }
 
     pub fn add_column(&mut self, column_name: &str, data_type: DataType) -> Result<(), Error> {
         println!("table_manager.add_column {} {:?}", column_name, data_type);
+        let mut column_definitions = self.column_definitions();
 
         if !self.column_exists(column_name) {
-            self.column_definitions.push(ColumnDefinition::new(
+            column_definitions.push(ColumnDefinition::new(
                 self.next_column_id as u8,
                 data_type,
                 column_name.to_string(),
             ));
+
+            self.write_metadata_page(&column_definitions);
 
             self.next_column_id += 1;
 
@@ -51,14 +74,18 @@ impl TableManager {
 
     pub fn insert_record(&mut self, values: Vec<Value>) -> Option<u64> {
         // Check that we have the same amount of `values` as we have `column_definitions`.
-        if values.len() != self.column_definitions.len() {
+        if values.len() != self.column_definitions().len() {
             return None;
         }
 
-        let (page_index, writable_page) = self.get_writable_page();
-        let mut active_table_page = writable_page.write().ok()?;
+        let (page_index, record_slot) = {
+            let (page_index, writable_page) = self.get_writable_page();
+            let mut active_table_page = writable_page.write().ok()?;
 
-        let record_slot = active_table_page.insert_record(values.clone())?;
+            let record_slot = active_table_page.insert_record(values.clone())?;
+
+            (page_index, record_slot)
+        };
 
         Some((page_index << 32) as u64 | record_slot as u64)
     }
@@ -100,7 +127,7 @@ impl TableManager {
         let sorted_column_indices: Vec<ColumnId> = column_names
             .into_iter()
             .map(|column_name| {
-                self.column_definitions
+                self.column_definitions()
                     .iter()
                     .find(|cd| cd.name() == column_name)
                     .ok_or(Error::ColumnDoesNotExist(column_name.to_string()))
@@ -127,8 +154,9 @@ impl TableManager {
     }
 
     fn get_writable_page(&mut self) -> (usize, &LockedTablePage) {
+        let column_definitions = self.column_definitions();
         let column_ids: Vec<ColumnId> = self
-            .column_definitions
+            .column_definitions()
             .iter()
             .map(|c| c.column_id())
             .collect();
@@ -146,15 +174,13 @@ impl TableManager {
             };
 
             if is_page_full {
-                let next_table_page =
-                    Rc::new(RwLock::new(TablePage::new(self.column_definitions.clone())));
+                let next_table_page = Rc::new(RwLock::new(TablePage::new(column_definitions)));
 
                 self.pages.push(next_table_page.clone());
                 page_vec.push(next_table_page);
             }
         } else {
-            let next_table_page =
-                Rc::new(RwLock::new(TablePage::new(self.column_definitions.clone())));
+            let next_table_page = Rc::new(RwLock::new(TablePage::new(column_definitions)));
 
             self.pages.push(next_table_page.clone());
             page_vec.push(next_table_page);
@@ -180,7 +206,7 @@ impl TableManager {
         // For every column that we want to return (all might not exist), figure out how to
         // transform the order of the record we retrieved into what we expect.
         let value_index_order: Vec<Option<ColumnId>> = self
-            .column_definitions
+            .column_definitions()
             .iter()
             .map(|expected_column| {
                 page_columns
@@ -200,17 +226,34 @@ impl TableManager {
     }
 
     fn column_exists(&self, column_name: &str) -> bool {
-        self.column_definitions
+        self.column_definitions()
             .iter()
             .find(|cd| cd.name() == column_name)
             .is_some()
     }
 
     fn column_names(&self) -> Vec<String> {
-        self.column_definitions
+        self.column_definitions()
             .iter()
             .map(|cd| cd.name().clone())
             .collect()
+    }
+
+    fn write_metadata_page(&mut self, column_definitions: &Vec<ColumnDefinition>) {
+        let mut column_definition_data: Vec<u8> = Vec::new();
+
+        column_definition_data.push(column_definitions.len() as u8);
+
+        for column_definition in column_definitions.iter() {
+            column_definition_data.extend_from_slice(&column_definition.to_raw_bytes());
+        }
+
+        // Add the total column definition size as the first 4 bytes
+        let mut metadata: Vec<u8> = Vec::with_capacity(4 + column_definition_data.len());
+        metadata.extend_from_slice(&(column_definition_data.len() as u32).to_le_bytes());
+        metadata.extend_from_slice(&column_definition_data);
+
+        self.page.metadata[0..metadata.len()].copy_from_slice(&metadata);
     }
 }
 
