@@ -32,13 +32,9 @@ impl Database {
     }
 
     pub fn name(&self) -> String {
-        let page_manager = super::page_manager().write().ok().unwrap();
-        let page = page_manager
-            .fetch_page(self.page_id)
-            .unwrap()
-            .read()
-            .ok()
-            .unwrap();
+        let page_manager = super::page_manager().read().ok().unwrap();
+        let option_page = page_manager.fetch_page(self.page_id).unwrap();
+        let page = option_page.read().ok().unwrap();
 
         let name_length = page.metadata[0] as usize;
         let name_bytes = &page.metadata[1..name_length + 1];

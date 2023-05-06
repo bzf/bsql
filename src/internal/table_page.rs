@@ -53,8 +53,9 @@ impl TablePage {
     /// relative index of the record in the page.
     /// Return `None` when the page is full.
     pub fn insert_record(&mut self, record_data: Vec<Value>) -> Option<u8> {
-        let page_manager = super::page_manager().write().ok()?;
-        let mut page = page_manager.fetch_page(self.page_id)?.write().ok()?;
+        let page_manager = super::page_manager().read().ok()?;
+        let option_page = page_manager.fetch_page(self.page_id)?;
+        let mut page = option_page.write().ok()?;
 
         if record_data.len() != self.column_definitions.len() {
             return None;
@@ -90,7 +91,8 @@ impl TablePage {
         }
 
         let page_manager = super::page_manager().read().ok()?;
-        let page = page_manager.fetch_page(self.page_id)?.read().ok()?;
+        let option_page = page_manager.fetch_page(self.page_id)?;
+        let page = option_page.read().ok()?;
 
         let start_index: usize = (record_index as usize) * (self.record_size() as usize);
         let end_index: usize = start_index + self.record_size() as usize;

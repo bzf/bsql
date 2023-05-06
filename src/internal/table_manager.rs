@@ -50,13 +50,9 @@ impl TableManager {
     }
 
     pub fn name(&self) -> String {
-        let page_manager = super::page_manager().write().ok().unwrap();
-        let page = page_manager
-            .fetch_page(self.page_id)
-            .unwrap()
-            .read()
-            .ok()
-            .unwrap();
+        let page_manager = super::page_manager().read().ok().unwrap();
+        let option_page = page_manager.fetch_page(self.page_id).unwrap();
+        let page = option_page.read().ok().unwrap();
 
         let name_length = page.metadata[COLUMN_TABLE_NAME_RANGE.start] as usize;
         let name_bytes = &page.metadata
@@ -66,13 +62,9 @@ impl TableManager {
     }
 
     pub fn column_definitions(&self) -> Vec<ColumnDefinition> {
-        let page_manager = super::page_manager().write().ok().unwrap();
-        let page = page_manager
-            .fetch_page(self.page_id)
-            .unwrap()
-            .read()
-            .ok()
-            .unwrap();
+        let page_manager = super::page_manager().read().ok().unwrap();
+        let option_page = page_manager.fetch_page(self.page_id).unwrap();
+        let page = option_page.read().ok().unwrap();
 
         let mut column_definitions = Vec::new();
         let number_of_columns: u8 = page.metadata[COLUMN_DEFINITION_START_OFFSET];
@@ -297,13 +289,9 @@ impl TableManager {
         let mut metadata: Vec<u8> = Vec::with_capacity(column_definition_data.len());
         metadata.extend_from_slice(&column_definition_data);
 
-        let page_manager = super::page_manager().write().ok().unwrap();
-        let mut page = page_manager
-            .fetch_page(self.page_id)
-            .unwrap()
-            .write()
-            .ok()
-            .unwrap();
+        let page_manager = super::page_manager().read().ok().unwrap();
+        let option_page = page_manager.fetch_page(self.page_id).unwrap();
+        let mut page = option_page.write().ok().unwrap();
 
         page.metadata
             [COLUMN_DEFINITION_START_OFFSET..COLUMN_DEFINITION_START_OFFSET + metadata.len()]

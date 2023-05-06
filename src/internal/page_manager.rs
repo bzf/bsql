@@ -27,8 +27,8 @@ impl PageManager {
     }
 
     /// Returns the page if it exists.
-    pub fn fetch_page(&self, page_id: PageId) -> Option<&SharedInternalPage> {
-        self.pages.get(page_id as usize).clone()
+    pub fn fetch_page(&self, page_id: PageId) -> Option<SharedInternalPage> {
+        self.pages.get(page_id as usize).cloned()
     }
 }
 
