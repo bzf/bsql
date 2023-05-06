@@ -7,7 +7,8 @@ type ColumnId = u8;
 type LockedTablePage = Rc<RwLock<TablePage>>;
 
 const COLUMN_BITMAP_RANGE: std::ops::Range<usize> = 0..32;
-const COLUMN_DEFINITION_START_OFFSET: usize = 32;
+const COLUMN_TABLE_NAME_RANGE: std::ops::Range<usize> = 32..96;
+const COLUMN_DEFINITION_START_OFFSET: usize = 96;
 
 pub struct TableManager {
     pages: Vec<LockedTablePage>,
@@ -18,22 +19,47 @@ pub struct TableManager {
 }
 
 impl TableManager {
-    pub fn new() -> Self {
+    pub fn new(table_name: &str) -> Result<Self, Error> {
+        if table_name.len() >= COLUMN_TABLE_NAME_RANGE.len() - 1 {
+            return Err(Error::TableNameTooLong);
+        }
+
         let mut page_manager = super::page_manager().write().unwrap();
         let (page_id, shared_page) = page_manager.create_page();
-        let page = shared_page.write().unwrap();
+        let mut page = shared_page.write().unwrap();
 
         let ref_cell: RefCell<[u8; 32]> =
             RefCell::new(page.metadata[COLUMN_BITMAP_RANGE].try_into().unwrap());
         let column_index = BitmapIndex::from_raw(ref_cell).expect("Failed to build BitmapIndex");
 
-        Self {
+        page.metadata[COLUMN_TABLE_NAME_RANGE.start] = table_name.len() as u8;
+        page.metadata[COLUMN_TABLE_NAME_RANGE.start + 1
+            ..COLUMN_TABLE_NAME_RANGE.start + 1 + table_name.len()]
+            .copy_from_slice(table_name.as_bytes());
+
+        Ok(Self {
             pages: Vec::new(),
             column_pages: HashMap::new(),
 
             page_id,
             column_index,
-        }
+        })
+    }
+
+    pub fn name(&self) -> String {
+        let page_manager = super::page_manager().write().ok().unwrap();
+        let page = page_manager
+            .fetch_page(self.page_id)
+            .unwrap()
+            .read()
+            .ok()
+            .unwrap();
+
+        let name_length = page.metadata[COLUMN_TABLE_NAME_RANGE.start] as usize;
+        let name_bytes = &page.metadata
+            [COLUMN_TABLE_NAME_RANGE.start + 1..COLUMN_TABLE_NAME_RANGE.start + 1 + name_length];
+
+        return String::from_utf8(name_bytes.to_vec()).unwrap();
     }
 
     pub fn column_definitions(&self) -> Vec<ColumnDefinition> {
@@ -69,7 +95,6 @@ impl TableManager {
     }
 
     pub fn add_column(&mut self, column_name: &str, data_type: DataType) -> Result<(), Error> {
-        println!("table_manager.add_column {} {:?}", column_name, data_type);
         let mut column_definitions = self.column_definitions();
 
         if !self.column_exists(column_name) {
@@ -289,7 +314,7 @@ mod tests {
 
     #[test]
     fn get_records_for_pages_with_different_columns() {
-        let mut table_manager = TableManager::new();
+        let mut table_manager = TableManager::new("test").unwrap();
         table_manager.add_column("day", DataType::Integer).unwrap();
         assert!(table_manager
             .insert_record(vec![Value::Integer(31)])
@@ -320,7 +345,7 @@ mod tests {
 
     #[test]
     fn test_get_records_with_specific_columns() {
-        let mut table_manager = TableManager::new();
+        let mut table_manager = TableManager::new("test").unwrap();
         table_manager.add_column("day", DataType::Integer).unwrap();
         assert!(table_manager
             .insert_record(vec![Value::Integer(13)])
@@ -355,7 +380,7 @@ mod tests {
 
     #[test]
     fn test_getting_a_single_record_works() {
-        let mut table_manager = TableManager::new();
+        let mut table_manager = TableManager::new("test").unwrap();
         table_manager.add_column("day", DataType::Integer).unwrap();
 
         let record_id = table_manager
@@ -374,7 +399,7 @@ mod tests {
 
     #[test]
     fn test_get_records_with_specific_columns_with_invalid_columns() {
-        let mut table_manager = TableManager::new();
+        let mut table_manager = TableManager::new("test").unwrap();
         table_manager.add_column("day", DataType::Integer).unwrap();
 
         assert_eq!(

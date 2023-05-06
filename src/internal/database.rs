@@ -1,40 +1,34 @@
-use std::collections::HashMap;
-
 use super::{ColumnDefinition, DataType, Error, RowResult, TableManager, Value};
 
 type TableId = u64;
 
 pub struct Database {
-    table_names: HashMap<String, TableId>,
-    table_managers: HashMap<TableId, TableManager>,
-
+    table_managers: Vec<TableManager>,
     next_table_id: TableId,
 }
 
 impl Database {
     pub fn new() -> Self {
         Self {
-            table_managers: HashMap::new(),
-
-            table_names: HashMap::new(),
+            table_managers: Vec::new(),
             next_table_id: 0,
         }
     }
 
     pub fn table_names(&self) -> Vec<String> {
-        self.table_names.keys().cloned().collect()
+        self.table_managers
+            .iter()
+            .map(|t| t.name().clone())
+            .collect()
     }
 
     pub fn column_definitions(&self, table_name: &str) -> Result<Vec<ColumnDefinition>, Error> {
-        let table_id = self
-            .table_names
-            .get(table_name)
-            .ok_or(Error::TableDoesNotExist(table_name.to_string()))?;
-
-        self.table_managers
-            .get(table_id)
-            .ok_or(Error::TableDoesNotExist(table_name.to_string()))
-            .map(|table_manager| table_manager.column_definitions())
+        Ok(self
+            .table_managers
+            .iter()
+            .find(|t| t.name() == table_name)
+            .ok_or(Error::TableDoesNotExist(table_name.to_string()))?
+            .column_definitions())
     }
 
     pub fn create_table(
@@ -45,13 +39,12 @@ impl Database {
         if !self.table_exists(table_name) {
             let table_id = self.next_table_id;
 
-            let mut table_manager = TableManager::new();
+            let mut table_manager = TableManager::new(table_name)?;
             for (column_name, data_type) in columns.iter() {
                 table_manager.add_column(column_name, data_type.clone())?;
             }
 
-            self.table_managers.insert(table_id, table_manager);
-            self.table_names.insert(table_name.to_string(), table_id);
+            self.table_managers.push(table_manager);
             self.next_table_id += 1;
 
             Ok(table_id)
@@ -66,14 +59,10 @@ impl Database {
         column_name: &str,
         data_type: DataType,
     ) -> Result<String, Error> {
-        let table_id = self
-            .table_names
-            .get(table_name)
-            .ok_or(Error::TableDoesNotExist(table_name.to_string()))?;
-
         let table_manager = self
             .table_managers
-            .get_mut(table_id)
+            .iter_mut()
+            .find(|t| t.name() == table_name)
             .ok_or(Error::TableDoesNotExist(table_name.to_string()))?;
 
         table_manager.add_column(column_name, data_type)?;
@@ -82,30 +71,19 @@ impl Database {
     }
 
     pub fn insert_row(&mut self, table_name: &str, values: Vec<Value>) -> Result<u64, Error> {
-        let table_id = self
-            .table_names
-            .get(table_name)
-            .ok_or(Error::TableDoesNotExist(table_name.to_string()))?;
-
-        let table_manager = self
-            .table_managers
-            .get_mut(table_id)
-            .ok_or(Error::TableDoesNotExist(table_name.to_string()))?;
-
-        table_manager
+        self.table_managers
+            .iter_mut()
+            .find(|t| t.name() == table_name)
+            .ok_or(Error::TableDoesNotExist(table_name.to_string()))?
             .insert_record(values)
             .ok_or(Error::InsertFailed)
     }
 
     pub fn select_all_columns(&self, table_name: &str) -> Result<RowResult, Error> {
-        let table_id = self
-            .table_names
-            .get(table_name)
-            .ok_or(Error::TableDoesNotExist(table_name.to_string()))?;
-
         Ok(self
             .table_managers
-            .get(table_id)
+            .iter()
+            .find(|t| t.name() == table_name)
             .ok_or(Error::TableDoesNotExist(table_name.to_string()))?
             .get_records())
     }
@@ -115,19 +93,18 @@ impl Database {
         table_name: &str,
         column_names: Vec<&str>,
     ) -> Result<RowResult, Error> {
-        let table_id = self
-            .table_names
-            .get(table_name)
-            .ok_or(Error::TableDoesNotExist(table_name.to_string()))?;
-
         self.table_managers
-            .get(table_id)
+            .iter()
+            .find(|t| t.name() == table_name)
             .ok_or(Error::TableDoesNotExist(table_name.to_string()))?
             .get_records_for_columns(&column_names)
     }
 
     fn table_exists(&self, table_name: &str) -> bool {
-        self.table_names.contains_key(table_name)
+        self.table_managers
+            .iter()
+            .find(|t| t.name() == table_name)
+            .is_some()
     }
 }
 
@@ -304,7 +281,7 @@ mod tests {
 
     #[test]
     fn test_inserting_record_and_getting_it_back_out() {
-        let mut table_manager = TableManager::new();
+        let mut table_manager = TableManager::new("test").unwrap();
         table_manager.add_column("day", DataType::Integer).unwrap();
 
         let record_id = table_manager

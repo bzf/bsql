@@ -13,4 +13,6 @@ pub enum Error {
     ColumnAlreadyExist(String),
     TooManyColumnsInUse,
     InsertFailed,
+
+    TableNameTooLong,
 }
