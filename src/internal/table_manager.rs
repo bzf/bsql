@@ -1,6 +1,9 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc, sync::RwLock};
 
-use super::{BitmapIndex, ColumnDefinition, DataType, Error, PageId, RowResult, TablePage, Value};
+use super::{
+    page_manager::SharedInternalPage, BitmapIndex, ColumnDefinition, DataType, Error, RowResult,
+    TablePage, Value,
+};
 
 type ColumnId = u8;
 
@@ -14,7 +17,7 @@ pub struct TableManager {
     pages: Vec<LockedTablePage>,
     column_pages: HashMap<Vec<ColumnId>, Vec<LockedTablePage>>,
 
-    page_id: PageId,
+    page: SharedInternalPage,
     column_index: BitmapIndex<255>,
 }
 
@@ -25,34 +28,37 @@ impl TableManager {
         }
 
         let mut page_manager = super::page_manager().write().unwrap();
-        let (page_id, shared_page) = page_manager.create_page();
-        let mut page = shared_page.write().unwrap();
+        let (_page_id, shared_page) = page_manager.create_page();
+
+        {
+            let mut page = shared_page.write().unwrap();
+
+            page.metadata[COLUMN_TABLE_NAME_RANGE.start] = table_name.len() as u8;
+            page.metadata[COLUMN_TABLE_NAME_RANGE.start + 1
+                ..COLUMN_TABLE_NAME_RANGE.start + 1 + table_name.len()]
+                .copy_from_slice(table_name.as_bytes());
+        }
 
         let column_index = {
             let bytes = Rc::new(RefCell::new(
-                page.metadata[COLUMN_BITMAP_RANGE].try_into().unwrap(),
+                shared_page.write().unwrap().metadata[COLUMN_BITMAP_RANGE]
+                    .try_into()
+                    .unwrap(),
             ));
             BitmapIndex::from_raw(bytes).unwrap()
         };
-
-        page.metadata[COLUMN_TABLE_NAME_RANGE.start] = table_name.len() as u8;
-        page.metadata[COLUMN_TABLE_NAME_RANGE.start + 1
-            ..COLUMN_TABLE_NAME_RANGE.start + 1 + table_name.len()]
-            .copy_from_slice(table_name.as_bytes());
 
         Ok(Self {
             pages: Vec::new(),
             column_pages: HashMap::new(),
 
-            page_id,
+            page: shared_page,
             column_index,
         })
     }
 
     pub fn name(&self) -> String {
-        let page_manager = super::page_manager().read().ok().unwrap();
-        let option_page = page_manager.fetch_page(self.page_id).unwrap();
-        let page = option_page.read().ok().unwrap();
+        let page = self.page.read().ok().unwrap();
 
         let name_length = page.metadata[COLUMN_TABLE_NAME_RANGE.start] as usize;
         let name_bytes = &page.metadata
@@ -62,9 +68,7 @@ impl TableManager {
     }
 
     pub fn column_definitions(&self) -> Vec<ColumnDefinition> {
-        let page_manager = super::page_manager().read().ok().unwrap();
-        let option_page = page_manager.fetch_page(self.page_id).unwrap();
-        let page = option_page.read().ok().unwrap();
+        let page = self.page.read().ok().unwrap();
 
         let mut column_definitions = Vec::new();
         let number_of_columns: u8 = page.metadata[COLUMN_DEFINITION_START_OFFSET];
@@ -289,9 +293,7 @@ impl TableManager {
         let mut metadata: Vec<u8> = Vec::with_capacity(column_definition_data.len());
         metadata.extend_from_slice(&column_definition_data);
 
-        let page_manager = super::page_manager().read().ok().unwrap();
-        let option_page = page_manager.fetch_page(self.page_id).unwrap();
-        let mut page = option_page.write().ok().unwrap();
+        let mut page = self.page.write().ok().unwrap();
 
         page.metadata
             [COLUMN_DEFINITION_START_OFFSET..COLUMN_DEFINITION_START_OFFSET + metadata.len()]

@@ -16,7 +16,7 @@ mod value;
 use bitmap_index::BitmapIndex;
 use database::Database;
 use page::InternalPage;
-use page_manager::{page_manager, PageId};
+use page_manager::{page_manager, PageId, SharedInternalPage};
 use table_manager::TableManager;
 use table_page::TablePage;
 

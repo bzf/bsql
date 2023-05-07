@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use super::{BitmapIndex, ColumnDefinition, DataType, PageId, Value};
+use super::{BitmapIndex, ColumnDefinition, DataType, SharedInternalPage, Value};
 
 /// A `TablePage` is a struct that represents a full page of data + metadata of records (and their
 /// columns) that are stored in a table.
@@ -17,35 +17,43 @@ pub struct TablePage {
     column_definitions: Vec<ColumnDefinition>,
     slots_index: BitmapIndex<255>,
 
-    page_id: PageId,
+    page: SharedInternalPage,
 }
 
 impl TablePage {
     pub fn new(column_definitions: Vec<ColumnDefinition>) -> Self {
         let mut page_manager = super::page_manager().write().unwrap();
-        let (page_id, shared_page) = page_manager.create_page();
-        let mut page = shared_page.write().unwrap();
+        let (_page_id, shared_page) = page_manager.create_page();
+
+        {
+            let mut page = shared_page.write().unwrap();
+
+            let column_definition_bytes: Vec<u8> = column_definitions
+                .iter()
+                .map(|cd| cd.to_raw_bytes())
+                .flatten()
+                .collect();
+
+            // Store the length of the column definitions in the metadata page after the
+            page.metadata[32..40].copy_from_slice(&column_definition_bytes.len().to_be_bytes());
+            page.metadata[40..40 + column_definition_bytes.len()]
+                .copy_from_slice(&column_definition_bytes);
+        }
 
         let slots_index: BitmapIndex<255> = {
-            let bytes = Rc::new(RefCell::new(page.metadata[0..32].try_into().unwrap()));
+            let bytes = Rc::new(RefCell::new(
+                shared_page.write().unwrap().metadata[0..32]
+                    .try_into()
+                    .unwrap(),
+            ));
             BitmapIndex::from_raw(bytes).unwrap()
         };
 
-        let column_definition_bytes: Vec<u8> = column_definitions
-            .iter()
-            .map(|cd| cd.to_raw_bytes())
-            .flatten()
-            .collect();
-
-        // Store the length of the column definitions in the metadata page after the
-        page.metadata[32..40].copy_from_slice(&column_definition_bytes.len().to_be_bytes());
-        page.metadata[40..40 + column_definition_bytes.len()]
-            .copy_from_slice(&column_definition_bytes);
-
         Self {
             column_definitions,
-            page_id,
             slots_index,
+
+            page: shared_page,
         }
     }
 
@@ -53,9 +61,7 @@ impl TablePage {
     /// relative index of the record in the page.
     /// Return `None` when the page is full.
     pub fn insert_record(&mut self, record_data: Vec<Value>) -> Option<u8> {
-        let page_manager = super::page_manager().read().ok()?;
-        let option_page = page_manager.fetch_page(self.page_id)?;
-        let mut page = option_page.write().ok()?;
+        let mut page = self.page.write().ok()?;
 
         if record_data.len() != self.column_definitions.len() {
             return None;
@@ -90,9 +96,7 @@ impl TablePage {
             return None;
         }
 
-        let page_manager = super::page_manager().read().ok()?;
-        let option_page = page_manager.fetch_page(self.page_id)?;
-        let page = option_page.read().ok()?;
+        let page = self.page.read().ok()?;
 
         let start_index: usize = (record_index as usize) * (self.record_size() as usize);
         let end_index: usize = start_index + self.record_size() as usize;
