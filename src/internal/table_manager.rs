@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::HashMap, rc::Rc, sync::RwLock};
+use std::{collections::HashMap, rc::Rc, sync::RwLock};
 
 use super::{
     page_manager::SharedInternalPage, BitmapIndex, ColumnDefinition, DataType, Error, RowResult,
@@ -18,7 +18,6 @@ pub struct TableManager {
     column_pages: HashMap<Vec<ColumnId>, Vec<LockedTablePage>>,
 
     page: SharedInternalPage,
-    column_index: BitmapIndex<255>,
 }
 
 impl TableManager {
@@ -39,21 +38,11 @@ impl TableManager {
                 .copy_from_slice(table_name.as_bytes());
         }
 
-        let column_index = {
-            let bytes = Rc::new(RefCell::new(
-                shared_page.write().unwrap().metadata[COLUMN_BITMAP_RANGE]
-                    .try_into()
-                    .unwrap(),
-            ));
-            BitmapIndex::from_raw(bytes).unwrap()
-        };
-
         Ok(Self {
             pages: Vec::new(),
             column_pages: HashMap::new(),
 
             page: shared_page,
-            column_index,
         })
     }
 
@@ -97,10 +86,15 @@ impl TableManager {
         let mut column_definitions = self.column_definitions();
 
         if !self.column_exists(column_name) {
+            let column_id = {
+                let mut page = self.page.write().unwrap();
+                let mut column_index: BitmapIndex<255> =
+                    BitmapIndex::from_raw(&mut page.metadata[COLUMN_BITMAP_RANGE]).unwrap();
+                column_index.consume().ok_or(Error::TooManyColumnsInUse)?
+            };
+
             column_definitions.push(ColumnDefinition::new(
-                self.column_index
-                    .consume()
-                    .ok_or(Error::TooManyColumnsInUse)?,
+                column_id,
                 data_type,
                 column_name.to_string(),
             ));

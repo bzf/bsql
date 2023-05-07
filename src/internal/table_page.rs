@@ -15,8 +15,6 @@ use super::{BitmapIndex, ColumnDefinition, DataType, SharedInternalPage, Value};
 
 pub struct TablePage {
     column_definitions: Vec<ColumnDefinition>,
-    slots_index: BitmapIndex<255>,
-
     page: SharedInternalPage,
 }
 
@@ -48,19 +46,8 @@ impl TablePage {
                 .copy_from_slice(&column_definitions_bytes);
         }
 
-        let slots_index: BitmapIndex<255> = {
-            let bytes = Rc::new(RefCell::new(
-                shared_page.write().unwrap().metadata[0..32]
-                    .try_into()
-                    .unwrap(),
-            ));
-            BitmapIndex::from_raw(bytes).unwrap()
-        };
-
         Self {
             column_definitions,
-            slots_index,
-
             page: shared_page,
         }
     }
@@ -109,19 +96,8 @@ impl TablePage {
             }
         }
 
-        let slots_index: BitmapIndex<255> = {
-            let bytes = Rc::new(RefCell::new(
-                shared_page.write().unwrap().metadata[0..32]
-                    .try_into()
-                    .unwrap(),
-            ));
-            BitmapIndex::from_raw(bytes).unwrap()
-        };
-
         Self {
             column_definitions,
-            slots_index,
-
             page: shared_page,
         }
     }
@@ -136,7 +112,10 @@ impl TablePage {
             return None;
         }
 
-        let record_index = self.slots_index.consume()?;
+        let mut slots_index: BitmapIndex<255> =
+            BitmapIndex::from_raw(&mut page.metadata[0..32]).unwrap();
+
+        let record_index = slots_index.consume()?;
 
         let record_data: Vec<u8> = record_data
             .into_iter()
@@ -153,7 +132,14 @@ impl TablePage {
     pub fn get_records(&self) -> Vec<Vec<Value>> {
         let mut records = Vec::with_capacity(self.record_count());
 
-        for record_index in self.slots_index.indices() {
+        let slots_indices = {
+            let mut page = self.page.write().unwrap();
+            BitmapIndex::<255>::from_raw(&mut page.metadata[0..32])
+                .unwrap()
+                .indices()
+        };
+
+        for record_index in slots_indices {
             records.push(self.get_record(record_index).unwrap());
         }
 
@@ -161,11 +147,13 @@ impl TablePage {
     }
 
     pub fn get_record(&self, record_index: u8) -> Option<Vec<Value>> {
-        if !self.slots_index.is_set(record_index) {
+        let mut page = self.page.write().unwrap();
+        let slots_index: BitmapIndex<255> =
+            BitmapIndex::from_raw(&mut page.metadata[0..32]).unwrap();
+
+        if !slots_index.is_set(record_index) {
             return None;
         }
-
-        let page = self.page.read().ok()?;
 
         let start_index: usize = (record_index as usize) * (self.record_size() as usize);
         let end_index: usize = start_index + self.record_size() as usize;
@@ -190,7 +178,11 @@ impl TablePage {
     }
 
     pub fn delete_record(&mut self, record_index: u8) {
-        self.slots_index.unset(record_index);
+        let mut page = self.page.write().unwrap();
+        let mut slots_index: BitmapIndex<255> =
+            BitmapIndex::from_raw(&mut page.metadata[0..32]).unwrap();
+
+        slots_index.unset(record_index);
     }
 
     pub fn column_definitions(&self) -> &Vec<ColumnDefinition> {
@@ -212,11 +204,19 @@ impl TablePage {
     }
 
     pub fn is_full(&self) -> bool {
-        self.slots_index.is_full()
+        let mut page = self.page.write().unwrap();
+        let slots_index: BitmapIndex<255> =
+            BitmapIndex::from_raw(&mut page.metadata[0..32]).unwrap();
+
+        slots_index.is_full()
     }
 
     fn record_count(&self) -> usize {
-        self.slots_index.count().into()
+        let mut page = self.page.write().unwrap();
+        let slots_index: BitmapIndex<255> =
+            BitmapIndex::from_raw(&mut page.metadata[0..32]).unwrap();
+
+        slots_index.count().into()
     }
 
     fn page_header_size(&self) -> u8 {
@@ -344,10 +344,14 @@ mod tests {
             ColumnDefinition::new(11, DataType::Integer, "month".to_string()),
         ];
 
-        TablePage::initialize(page.clone(), column_definitions.clone());
+        {
+            let mut table_page = TablePage::initialize(page.clone(), column_definitions.clone());
+            table_page.insert_record(vec![Value::Integer(13), Value::Integer(12)]);
+        }
 
         let table_page = TablePage::load(page.clone());
-        assert_eq!(&column_definitions, table_page.column_definitions())
+        assert_eq!(&column_definitions, table_page.column_definitions());
+        assert_eq!(1, table_page.record_count());
     }
 
     #[test]
