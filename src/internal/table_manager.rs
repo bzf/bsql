@@ -1,23 +1,17 @@
-use std::{collections::HashMap, rc::Rc, sync::RwLock};
-
 use super::{
-    page_manager::SharedInternalPage, BitmapIndex, ColumnDefinition, DataType, Error, RowResult,
-    TablePage, Value,
+    page_manager::SharedInternalPage, BitmapIndex, ColumnDefinition, DataType, Error, PageId,
+    RowResult, TablePage, Value,
 };
 
 type ColumnId = u8;
-
-type LockedTablePage = Rc<RwLock<TablePage>>;
 
 const COLUMN_BITMAP_RANGE: std::ops::Range<usize> = 0..32;
 const COLUMN_TABLE_NAME_RANGE: std::ops::Range<usize> = 32..96;
 const COLUMN_DEFINITION_START_OFFSET: usize = 96;
 
 pub struct TableManager {
-    pages: Vec<LockedTablePage>,
-    column_pages: HashMap<Vec<ColumnId>, Vec<LockedTablePage>>,
-
     page: SharedInternalPage,
+    page_ids: Vec<PageId>,
 }
 
 impl TableManager {
@@ -39,9 +33,7 @@ impl TableManager {
         }
 
         Ok(Self {
-            pages: Vec::new(),
-            column_pages: HashMap::new(),
-
+            page_ids: Vec::new(),
             page: shared_page,
         })
     }
@@ -113,26 +105,36 @@ impl TableManager {
             return None;
         }
 
-        let (page_index, record_slot) = {
-            let (page_index, writable_page) = self.get_writable_page();
-            let mut active_table_page = writable_page.write().ok()?;
+        let (page_id, record_slot) = {
+            let (page_id, mut active_table_page) = self.get_writable_page();
 
             let record_slot = active_table_page.insert_record(values.clone())?;
 
-            (page_index, record_slot)
+            (page_id, record_slot)
         };
 
-        Some((page_index << 32) as u64 | record_slot as u64)
+        println!(
+            "TableManager.insert_record -> ({}, {})",
+            page_id, record_slot
+        );
+
+        Some((page_id << 32) as u64 | record_slot as u64)
     }
 
     pub fn get_record(&self, record_id: u64) -> Option<RowResult> {
-        let page_index = (record_id >> 32) & 0xFFFF_FFFF;
+        let page_id = (record_id >> 32) & 0xFFFF_FFFF;
         let record_slot = record_id & 0xFFFF_FFFF;
 
-        let page = self.pages.get(page_index as usize)?.read().ok()?;
+        println!("TableManager.get_record({}, {})", page_id, record_slot);
 
-        let page_columns = page.column_definitions();
-        let row_data = page
+        let table_page = {
+            let page_manager = super::page_manager().read().unwrap();
+            let shared_page = page_manager.fetch_page(page_id as u32).unwrap();
+            TablePage::load(shared_page)
+        };
+
+        let page_columns = table_page.column_definitions();
+        let row_data = table_page
             .get_record(record_slot as u8)
             .map(|record| self.normalize_page_record(&page_columns, record))?;
 
@@ -142,11 +144,19 @@ impl TableManager {
     pub fn get_records(&self) -> RowResult {
         let mut rows: Vec<Vec<Option<Value>>> = Vec::new();
 
-        for locked_page in self.column_pages.values().flatten() {
-            let page = locked_page.read().unwrap();
+        println!("TableManager.get_records page_ids={:?}", self.page_ids);
 
-            let page_columns = page.column_definitions();
-            let page_records = page.get_records();
+        for page_id in &self.page_ids {
+            let table_page = {
+                let page_manager = super::page_manager().read().unwrap();
+                let shared_page = page_manager.fetch_page(*page_id as u32).unwrap();
+                TablePage::load(shared_page)
+            };
+
+            let page_columns = table_page.column_definitions();
+            let page_records = table_page.get_records();
+
+            println!("page_records for page_id={} -> {:?}", page_id, page_records);
 
             // For every column that we want to return (all might not exist), figure out how to
             // transform the order of the record we retrieved into what we expect.
@@ -188,45 +198,41 @@ impl TableManager {
         ))
     }
 
-    fn get_writable_page(&mut self) -> (usize, &LockedTablePage) {
-        let column_definitions = self.column_definitions();
-        let column_ids: Vec<ColumnId> = self
-            .column_definitions()
-            .iter()
-            .map(|c| c.column_id())
-            .collect();
+    fn get_writable_page(&mut self) -> (usize, TablePage) {
+        for page_id in &self.page_ids {
+            // Load the `TablePage` from the `page_id`
+            let page_manager = super::page_manager().read().unwrap();
+            let page = page_manager.fetch_page(*page_id).unwrap();
+            let table_page = TablePage::load(page);
 
-        let page_vec: &mut Vec<LockedTablePage> =
-            self.column_pages.entry(column_ids).or_insert(Vec::new());
-
-        // Check if the last page, if any, is full and if so create a new one.
-        // If there are no pages, create one.
-        let last_table_page_locked = page_vec.last_mut();
-        if let Some(last_table_page_locked) = last_table_page_locked {
-            let is_page_full = {
-                let last_table_page = last_table_page_locked.write().unwrap();
-                last_table_page.is_full()
-            };
-
-            if is_page_full {
-                let next_table_page = Rc::new(RwLock::new(TablePage::new(column_definitions)));
-
-                self.pages.push(next_table_page.clone());
-                page_vec.push(next_table_page);
+            // If this `TablePage` have different columns than us, skip to the next one.
+            if *table_page.column_definitions() != self.column_definitions() {
+                continue;
             }
-        } else {
-            let next_table_page = Rc::new(RwLock::new(TablePage::new(column_definitions)));
 
-            self.pages.push(next_table_page.clone());
-            page_vec.push(next_table_page);
+            // Check if the page is full, otherwise return it.
+            if table_page.is_full() {
+                // Create a new page and return that.
+                let mut page_manager = super::page_manager().write().unwrap();
+                let (page_id, shared_page) = page_manager.create_page();
+
+                let table_page = TablePage::initialize(shared_page, self.column_definitions());
+                self.page_ids.push(page_id);
+
+                return (page_id as usize, table_page);
+            } else {
+                return (*page_id as usize, table_page);
+            }
         }
 
-        let page_index = page_vec
-            .iter()
-            .position(|i| Rc::ptr_eq(i, page_vec.last().unwrap()))
-            .unwrap();
+        // Create a new page and return that.
+        let mut page_manager = super::page_manager().write().unwrap();
+        let (page_id, shared_page) = page_manager.create_page();
 
-        return (page_index, page_vec.last_mut().unwrap());
+        let table_page = TablePage::initialize(shared_page, self.column_definitions());
+        self.page_ids.push(page_id);
+
+        return (page_id as usize, table_page);
     }
 
     // Takes a `Vec<Value>` and transforms it into a `Vec<Option<Value>>` where any missing columns
