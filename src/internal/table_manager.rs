@@ -22,8 +22,20 @@ impl TableManager {
         let mut page_manager = super::page_manager().write().unwrap();
         let (_page_id, shared_page) = page_manager.create_page();
 
+        return Self::initialize(shared_page.clone(), table_name);
+    }
+
+    pub fn initialize(shared_page: SharedInternalPage, table_name: &str) -> Result<Self, Error> {
+        if table_name.len() >= COLUMN_TABLE_NAME_RANGE.len() - 1 {
+            return Err(Error::TableNameTooLong);
+        }
+
         Self::write_metadata_page(shared_page.clone(), table_name, &vec![], &vec![]);
 
+        Ok(Self { page: shared_page })
+    }
+
+    pub fn load(shared_page: SharedInternalPage) -> Result<Self, Error> {
         Ok(Self { page: shared_page })
     }
 
@@ -374,7 +386,11 @@ impl TableManager {
 
 #[cfg(test)]
 mod tests {
+    use std::rc::Rc;
+    use std::sync::RwLock;
+
     use super::*;
+    use crate::internal::InternalPage;
 
     #[test]
     fn fetching_table_name_works() {
@@ -476,5 +492,20 @@ mod tests {
             Err(Error::ColumnDoesNotExist("month".to_string())),
             table_manager.get_records_for_columns(&vec!["month", "day"])
         )
+    }
+
+    #[test]
+    fn test_initialize_and_load() {
+        let page = Rc::new(RwLock::new(InternalPage::new()));
+
+        {
+            let table_manager =
+                TableManager::initialize(page.clone(), "my_table").expect("Failed to initialize");
+
+            assert_eq!(table_manager.name(), "my_table");
+        }
+
+        let table_manager = TableManager::load(page.clone()).expect("Failed to load TableManager");
+        assert_eq!(table_manager.name(), "my_table");
     }
 }
