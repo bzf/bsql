@@ -23,14 +23,7 @@ impl TableManager {
         let mut page_manager = super::page_manager().write().unwrap();
         let (_page_id, shared_page) = page_manager.create_page();
 
-        {
-            let mut page = shared_page.write().unwrap();
-
-            page.metadata[COLUMN_TABLE_NAME_RANGE.start] = table_name.len() as u8;
-            page.metadata[COLUMN_TABLE_NAME_RANGE.start + 1
-                ..COLUMN_TABLE_NAME_RANGE.start + 1 + table_name.len()]
-                .copy_from_slice(table_name.as_bytes());
-        }
+        Self::write_metadata_page(shared_page.clone(), table_name, &vec![]);
 
         Ok(Self {
             page_ids: Vec::new(),
@@ -91,7 +84,7 @@ impl TableManager {
                 column_name.to_string(),
             ));
 
-            self.write_metadata_page(&column_definitions);
+            Self::write_metadata_page(self.page.clone(), &self.name(), &column_definitions);
 
             Ok(())
         } else {
@@ -280,7 +273,12 @@ impl TableManager {
             .collect()
     }
 
-    fn write_metadata_page(&self, column_definitions: &Vec<ColumnDefinition>) {
+    fn write_metadata_page(
+        shared_page: SharedInternalPage,
+        table_name: &str,
+        column_definitions: &Vec<ColumnDefinition>,
+    ) {
+        let mut page = shared_page.write().unwrap();
         let mut column_definition_data: Vec<u8> = Vec::new();
 
         column_definition_data.push(column_definitions.len() as u8);
@@ -289,11 +287,14 @@ impl TableManager {
             column_definition_data.extend_from_slice(&column_definition.to_raw_bytes());
         }
 
+        page.metadata[COLUMN_TABLE_NAME_RANGE.start] = table_name.len() as u8;
+        page.metadata[COLUMN_TABLE_NAME_RANGE.start + 1
+            ..COLUMN_TABLE_NAME_RANGE.start + 1 + table_name.len()]
+            .copy_from_slice(table_name.as_bytes());
+
         // Add the total column definition size as the first 4 bytes
         let mut metadata: Vec<u8> = Vec::with_capacity(column_definition_data.len());
         metadata.extend_from_slice(&column_definition_data);
-
-        let mut page = self.page.write().ok().unwrap();
 
         page.metadata
             [COLUMN_DEFINITION_START_OFFSET..COLUMN_DEFINITION_START_OFFSET + metadata.len()]
@@ -304,6 +305,12 @@ impl TableManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fetching_table_name_works() {
+        let table_manager = TableManager::new("test").unwrap();
+        assert_eq!("test", table_manager.name());
+    }
 
     #[test]
     fn get_records_for_pages_with_different_columns() {
