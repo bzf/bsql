@@ -11,7 +11,6 @@ const COLUMN_DEFINITION_START_OFFSET: usize = 96;
 
 pub struct TableManager {
     page: SharedInternalPage,
-    page_ids: Vec<PageId>,
 }
 
 impl TableManager {
@@ -23,12 +22,9 @@ impl TableManager {
         let mut page_manager = super::page_manager().write().unwrap();
         let (_page_id, shared_page) = page_manager.create_page();
 
-        Self::write_metadata_page(shared_page.clone(), table_name, &vec![]);
+        Self::write_metadata_page(shared_page.clone(), table_name, &vec![], &vec![]);
 
-        Ok(Self {
-            page_ids: Vec::new(),
-            page: shared_page,
-        })
+        Ok(Self { page: shared_page })
     }
 
     pub fn name(&self) -> String {
@@ -84,7 +80,12 @@ impl TableManager {
                 column_name.to_string(),
             ));
 
-            Self::write_metadata_page(self.page.clone(), &self.name(), &column_definitions);
+            Self::write_metadata_page(
+                self.page.clone(),
+                &self.name(),
+                &column_definitions,
+                &self.page_ids(),
+            );
 
             Ok(())
         } else {
@@ -137,9 +138,7 @@ impl TableManager {
     pub fn get_records(&self) -> RowResult {
         let mut rows: Vec<Vec<Option<Value>>> = Vec::new();
 
-        println!("TableManager.get_records page_ids={:?}", self.page_ids);
-
-        for page_id in &self.page_ids {
+        for page_id in &self.page_ids() {
             let table_page = {
                 let page_manager = super::page_manager().read().unwrap();
                 let shared_page = page_manager.fetch_page(*page_id as u32).unwrap();
@@ -192,7 +191,9 @@ impl TableManager {
     }
 
     fn get_writable_page(&mut self) -> (usize, TablePage) {
-        for page_id in &self.page_ids {
+        let mut page_ids = self.page_ids();
+
+        for page_id in &page_ids {
             // Load the `TablePage` from the `page_id`
             let page_manager = super::page_manager().read().unwrap();
             let page = page_manager.fetch_page(*page_id).unwrap();
@@ -210,7 +211,14 @@ impl TableManager {
                 let (page_id, shared_page) = page_manager.create_page();
 
                 let table_page = TablePage::initialize(shared_page, self.column_definitions());
-                self.page_ids.push(page_id);
+                page_ids.push(page_id);
+
+                Self::write_metadata_page(
+                    self.page.clone(),
+                    &self.name(),
+                    &self.column_definitions(),
+                    &page_ids,
+                );
 
                 return (page_id as usize, table_page);
             } else {
@@ -223,7 +231,14 @@ impl TableManager {
         let (page_id, shared_page) = page_manager.create_page();
 
         let table_page = TablePage::initialize(shared_page, self.column_definitions());
-        self.page_ids.push(page_id);
+        page_ids.push(page_id);
+
+        Self::write_metadata_page(
+            self.page.clone(),
+            &self.name(),
+            &self.column_definitions(),
+            &page_ids,
+        );
 
         return (page_id as usize, table_page);
     }
@@ -277,28 +292,83 @@ impl TableManager {
         shared_page: SharedInternalPage,
         table_name: &str,
         column_definitions: &Vec<ColumnDefinition>,
+        page_ids: &Vec<PageId>,
     ) {
         let mut page = shared_page.write().unwrap();
-        let mut column_definition_data: Vec<u8> = Vec::new();
 
-        column_definition_data.push(column_definitions.len() as u8);
-
-        for column_definition in column_definitions.iter() {
-            column_definition_data.extend_from_slice(&column_definition.to_raw_bytes());
+        {
+            // Write the table name on the range COLUMN_TABLE_NAME_RANGE
+            page.metadata[COLUMN_TABLE_NAME_RANGE.start] = table_name.len() as u8;
+            page.metadata[COLUMN_TABLE_NAME_RANGE.start + 1
+                ..COLUMN_TABLE_NAME_RANGE.start + 1 + table_name.len()]
+                .copy_from_slice(table_name.as_bytes());
         }
 
-        page.metadata[COLUMN_TABLE_NAME_RANGE.start] = table_name.len() as u8;
-        page.metadata[COLUMN_TABLE_NAME_RANGE.start + 1
-            ..COLUMN_TABLE_NAME_RANGE.start + 1 + table_name.len()]
-            .copy_from_slice(table_name.as_bytes());
+        let column_definitions_length = {
+            // Write the column definitions
+            let mut column_definition_data: Vec<u8> = Vec::new();
+            column_definition_data.push(column_definitions.len() as u8);
 
-        // Add the total column definition size as the first 4 bytes
-        let mut metadata: Vec<u8> = Vec::with_capacity(column_definition_data.len());
-        metadata.extend_from_slice(&column_definition_data);
+            for column_definition in column_definitions.iter() {
+                column_definition_data.extend_from_slice(&column_definition.to_raw_bytes());
+            }
 
-        page.metadata
-            [COLUMN_DEFINITION_START_OFFSET..COLUMN_DEFINITION_START_OFFSET + metadata.len()]
-            .copy_from_slice(&metadata);
+            let mut metadata: Vec<u8> = Vec::with_capacity(column_definition_data.len());
+            metadata.extend_from_slice(&column_definition_data);
+
+            page.metadata
+                [COLUMN_DEFINITION_START_OFFSET..COLUMN_DEFINITION_START_OFFSET + metadata.len()]
+                .copy_from_slice(&metadata);
+
+            metadata.len()
+        };
+
+        {
+            let mut page_ids_cursor = COLUMN_DEFINITION_START_OFFSET + column_definitions_length;
+
+            // Write page_ids after table_name
+            page.metadata[page_ids_cursor] = page_ids.len() as u8;
+            page_ids_cursor += 1;
+
+            let page_ids_array: Vec<u8> = page_ids
+                .iter()
+                .map(|pid| pid.to_be_bytes())
+                .flatten()
+                .collect();
+
+            page.metadata[page_ids_cursor..page_ids_cursor + page_ids_array.len()]
+                .copy_from_slice(&page_ids_array);
+        }
+    }
+
+    fn page_ids(&self) -> Vec<PageId> {
+        let page = self.page.read().unwrap();
+
+        let mut cursor = COLUMN_DEFINITION_START_OFFSET;
+
+        // Skip all the definitions
+        let number_of_definitions = page.metadata[cursor];
+        cursor += 1;
+
+        for _ in 0..number_of_definitions {
+            let number_of_bytes_for_definition = page.metadata[cursor];
+            cursor += number_of_bytes_for_definition as usize + 1;
+        }
+
+        let number_of_pages = page.metadata[cursor];
+        cursor += 1;
+
+        let mut page_ids = Vec::new();
+
+        for _ in 0..number_of_pages {
+            let page_id =
+                PageId::from_be_bytes(page.metadata[cursor..cursor + 4].try_into().unwrap());
+            page_ids.push(page_id);
+
+            cursor += 4;
+        }
+
+        return page_ids;
     }
 }
 
