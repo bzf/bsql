@@ -5,7 +5,6 @@ use crate::internal::SharedInternalPage;
 
 pub struct Manager {
     page: SharedInternalPage,
-    database_page_ids: Vec<PageId>,
 }
 
 impl Manager {
@@ -13,10 +12,9 @@ impl Manager {
         let mut page_manager = super::page_manager().write().unwrap();
         let (_page_id, shared_page) = page_manager.create_page();
 
-        Self {
-            page: shared_page,
-            database_page_ids: Vec::new(),
-        }
+        Self::write_metadata_page(shared_page.clone(), vec![]);
+
+        Self { page: shared_page }
     }
 
     pub fn execute(&mut self, database_name: &str, query: &str) -> Result<QueryResult, Error> {
@@ -131,7 +129,9 @@ impl Manager {
 
             Database::initialize(shared_page.clone(), name)?;
 
-            self.database_page_ids.push(page_id);
+            let mut database_page_ids = self.database_page_ids();
+            database_page_ids.push(page_id);
+            Self::write_metadata_page(self.page.clone(), database_page_ids);
 
             Ok(QueryResult::CommandSuccessMessage(
                 "CREATE DATABASE".to_string(),
@@ -191,19 +191,51 @@ impl Manager {
     }
 
     fn databases(&self) -> Vec<Database> {
-        let mut databases: Vec<Database> = Vec::new();
+        let database_page_ids = self.database_page_ids();
+        let mut databases = Vec::new();
 
-        for database_page_id in &self.database_page_ids {
-            let database = {
-                let page_manager = super::page_manager().read().unwrap();
-                let shared_page = page_manager.fetch_page(*database_page_id as u32).unwrap();
-                Database::load(shared_page).unwrap()
-            };
+        for database_page_id in &database_page_ids {
+            let page_manager = super::page_manager().read().unwrap();
+            let page = page_manager.fetch_page(*database_page_id).unwrap();
 
+            let database = Database::load(page).unwrap();
             databases.push(database);
         }
 
         return databases;
+    }
+
+    fn database_page_ids(&self) -> Vec<PageId> {
+        let page = self.page.read().unwrap();
+        let number_of_database_page_ids = page.metadata[0] as usize;
+        let mut database_page_ids: Vec<PageId> = Vec::new();
+
+        for index in 0..number_of_database_page_ids {
+            let start_index = index as usize * 4 + 1;
+            let end_index = start_index + 4;
+            let page_id_bytes: &[u8; 4] =
+                &page.metadata[start_index..end_index].try_into().unwrap();
+
+            let database_page_id = PageId::from_le_bytes(*page_id_bytes);
+            database_page_ids.push(database_page_id);
+        }
+
+        return database_page_ids;
+    }
+
+    fn write_metadata_page(shared_page: SharedInternalPage, database_page_ids: Vec<PageId>) {
+        let mut page = shared_page.write().unwrap();
+        let number_of_database_page_ids = database_page_ids.len();
+        page.metadata[0] = number_of_database_page_ids as u8;
+
+        let database_page_ids_bytes: Vec<u8> = database_page_ids
+            .iter()
+            .map(|dpid| dpid.to_le_bytes())
+            .flatten()
+            .collect();
+
+        page.metadata[1..database_page_ids_bytes.len() + 1]
+            .copy_from_slice(&database_page_ids_bytes);
     }
 }
 
