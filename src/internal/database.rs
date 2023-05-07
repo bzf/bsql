@@ -1,13 +1,14 @@
 use super::{
-    ColumnDefinition, DataType, Error, RowResult, SharedInternalPage, TableManager, Value,
+    ColumnDefinition, DataType, Error, PageId, RowResult, SharedInternalPage, TableManager, Value,
 };
 
 type TableId = u64;
 
+const TABLE_MANAGER_PAGE_IDS_OFFSET: usize = 64;
+
 pub struct Database {
     page: SharedInternalPage,
-
-    table_managers: Vec<TableManager>,
+    table_manager_page_ids: Vec<PageId>,
     next_table_id: TableId,
 }
 
@@ -30,8 +31,7 @@ impl Database {
 
         Ok(Self {
             page: shared_page,
-
-            table_managers: Vec::new(),
+            table_manager_page_ids: Vec::new(),
             next_table_id: 0,
         })
     }
@@ -45,7 +45,7 @@ impl Database {
     }
 
     pub fn table_names(&self) -> Vec<String> {
-        self.table_managers
+        self.table_managers()
             .iter()
             .map(|t| t.name().clone())
             .collect()
@@ -53,7 +53,7 @@ impl Database {
 
     pub fn column_definitions(&self, table_name: &str) -> Result<Vec<ColumnDefinition>, Error> {
         Ok(self
-            .table_managers
+            .table_managers()
             .iter()
             .find(|t| t.name() == table_name)
             .ok_or(Error::TableDoesNotExist(table_name.to_string()))?
@@ -68,12 +68,15 @@ impl Database {
         if !self.table_exists(table_name) {
             let table_id = self.next_table_id;
 
-            let mut table_manager = TableManager::new(table_name)?;
+            let mut page_manager = super::page_manager().write().unwrap();
+            let (page_id, shared_page) = page_manager.create_page();
+
+            let mut table_manager = TableManager::initialize(shared_page, table_name)?;
             for (column_name, data_type) in columns.iter() {
                 table_manager.add_column(column_name, data_type.clone())?;
             }
 
-            self.table_managers.push(table_manager);
+            self.table_manager_page_ids.push(page_id);
             self.next_table_id += 1;
 
             Ok(table_id)
@@ -88,8 +91,8 @@ impl Database {
         column_name: &str,
         data_type: DataType,
     ) -> Result<String, Error> {
-        let table_manager = self
-            .table_managers
+        let mut table_managers = self.table_managers();
+        let table_manager = table_managers
             .iter_mut()
             .find(|t| t.name() == table_name)
             .ok_or(Error::TableDoesNotExist(table_name.to_string()))?;
@@ -100,7 +103,9 @@ impl Database {
     }
 
     pub fn insert_row(&mut self, table_name: &str, values: Vec<Value>) -> Result<u64, Error> {
-        self.table_managers
+        let mut table_managers = self.table_managers();
+
+        table_managers
             .iter_mut()
             .find(|t| t.name() == table_name)
             .ok_or(Error::TableDoesNotExist(table_name.to_string()))?
@@ -110,7 +115,7 @@ impl Database {
 
     pub fn select_all_columns(&self, table_name: &str) -> Result<RowResult, Error> {
         Ok(self
-            .table_managers
+            .table_managers()
             .iter()
             .find(|t| t.name() == table_name)
             .ok_or(Error::TableDoesNotExist(table_name.to_string()))?
@@ -122,7 +127,7 @@ impl Database {
         table_name: &str,
         column_names: Vec<&str>,
     ) -> Result<RowResult, Error> {
-        self.table_managers
+        self.table_managers()
             .iter()
             .find(|t| t.name() == table_name)
             .ok_or(Error::TableDoesNotExist(table_name.to_string()))?
@@ -130,10 +135,24 @@ impl Database {
     }
 
     fn table_exists(&self, table_name: &str) -> bool {
-        self.table_managers
+        self.table_managers()
             .iter()
             .find(|t| t.name() == table_name)
             .is_some()
+    }
+
+    fn table_managers(&self) -> Vec<TableManager> {
+        let page_manager = super::page_manager().read().unwrap();
+        let mut table_managers = Vec::new();
+
+        for page_id in &self.table_manager_page_ids {
+            let shared_page = page_manager.fetch_page(*page_id).unwrap();
+
+            let table_manager = TableManager::load(shared_page).unwrap();
+            table_managers.push(table_manager);
+        }
+
+        return table_managers;
     }
 }
 
