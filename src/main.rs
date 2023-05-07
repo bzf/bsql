@@ -9,9 +9,7 @@ use bsql::{ColumnDefinition, Error, Manager, PageManager, QueryResult};
 use print_table::{print_row_result, print_table};
 
 fn main() {
-    // TODO: Pass along the page manager here instead of using a singleton.
-    // Could use the :memory: filename (like SQLite) to not write to disk at all.
-    let page_manager = Rc::new(RwLock::new(PageManager::new()));
+    let page_manager = Rc::new(RwLock::new(PageManager::new("bsql.db")));
 
     let mut database_manager = Manager::new(page_manager);
     let mut active_database = String::new();

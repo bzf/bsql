@@ -4,7 +4,7 @@ use bsql::{Manager, PageManager, QueryResult};
 
 #[test]
 fn test_creating_database_table_and_inserting_rows() {
-    let page_manager = Rc::new(RwLock::new(PageManager::new()));
+    let page_manager = Rc::new(RwLock::new(PageManager::new(":memory:")));
     let mut manager = Manager::new(page_manager);
 
     let database_name = "drinkr";

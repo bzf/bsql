@@ -14,12 +14,21 @@ pub struct Manager {
 
 impl Manager {
     pub fn new(page_manager: Rc<RwLock<PageManager>>) -> Self {
-        let (_page_id, shared_page) = {
+        let mut read_from_memory = false;
+        let shared_page = {
             let mut page_manager = page_manager.write().unwrap();
-            page_manager.create_page()
+            if let Some(page) = page_manager.fetch_page(0) {
+                read_from_memory = true;
+                page
+            } else {
+                let (_page_id, page) = page_manager.create_page();
+                page
+            }
         };
 
-        Self::write_metadata_page(page_manager.clone(), shared_page.clone(), vec![]);
+        if !read_from_memory {
+            Self::write_metadata_page(page_manager.clone(), shared_page.clone(), vec![]);
+        }
 
         Self {
             page_manager,
@@ -134,9 +143,16 @@ impl Manager {
             .find(|d| d.name() == database_name)
             .ok_or(Error::DatabaseDoesNotExist(database_name.to_string()))?;
 
-        database
+        let query_result = database
             .add_column(table_name, column_name, data_type)
-            .map(|command| QueryResult::CommandSuccessMessage(command))
+            .map(|command| QueryResult::CommandSuccessMessage(command));
+
+        {
+            let page_manager = self.page_manager.read().unwrap();
+            page_manager.commit();
+        }
+
+        return query_result;
     }
 
     fn create_database(&mut self, name: &str) -> Result<QueryResult, Error> {
@@ -158,6 +174,11 @@ impl Manager {
                 database_page_ids,
             );
 
+            {
+                let page_manager = self.page_manager.read().unwrap();
+                page_manager.commit();
+            }
+
             Ok(QueryResult::CommandSuccessMessage(
                 "CREATE DATABASE".to_string(),
             ))
@@ -178,14 +199,16 @@ impl Manager {
             .find(|d| d.name() == database_name)
             .ok_or(Error::DatabaseDoesNotExist(database_name.to_string()))?;
 
+        let query_result = database
+            .insert_row(table_name, values)
+            .map(|_record_id| QueryResult::InsertSuccess { count: 1 });
+
         {
             let page_manager = self.page_manager.read().unwrap();
             page_manager.commit();
         }
 
-        database
-            .insert_row(table_name, values)
-            .map(|_record_id| QueryResult::InsertSuccess { count: 1 })
+        return query_result;
     }
 
     fn select_all(&self, database_name: &str, table_name: &str) -> Result<QueryResult, Error> {
@@ -286,7 +309,7 @@ mod tests {
 
     #[test]
     fn test_list_databases() {
-        let page_manager = Rc::new(RwLock::new(PageManager::new()));
+        let page_manager = Rc::new(RwLock::new(PageManager::new(":memory:")));
         let mut manager = Manager::new(page_manager);
         manager.create_database("hello").unwrap();
         manager.create_database("world").unwrap();

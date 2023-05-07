@@ -422,14 +422,14 @@ mod tests {
 
     #[test]
     fn fetching_table_name_works() {
-        let page_manager = Rc::new(RwLock::new(PageManager::new()));
+        let page_manager = Rc::new(RwLock::new(PageManager::new(":memory:")));
         let table_manager = TableManager::new(page_manager, "test").unwrap();
         assert_eq!("test", table_manager.name());
     }
 
     #[test]
     fn get_records_for_pages_with_different_columns() {
-        let page_manager = Rc::new(RwLock::new(PageManager::new()));
+        let page_manager = Rc::new(RwLock::new(PageManager::new(":memory:")));
         let mut table_manager = TableManager::new(page_manager, "test").unwrap();
         table_manager.add_column("day", DataType::Integer).unwrap();
         assert!(table_manager
@@ -461,7 +461,7 @@ mod tests {
 
     #[test]
     fn test_get_records_with_specific_columns() {
-        let page_manager = Rc::new(RwLock::new(PageManager::new()));
+        let page_manager = Rc::new(RwLock::new(PageManager::new(":memory:")));
         let mut table_manager = TableManager::new(page_manager, "test").unwrap();
         table_manager.add_column("day", DataType::Integer).unwrap();
         assert!(table_manager
@@ -497,7 +497,7 @@ mod tests {
 
     #[test]
     fn test_getting_a_single_record_works() {
-        let page_manager = Rc::new(RwLock::new(PageManager::new()));
+        let page_manager = Rc::new(RwLock::new(PageManager::new(":memory:")));
         let mut table_manager = TableManager::new(page_manager, "test").unwrap();
         table_manager.add_column("day", DataType::Integer).unwrap();
 
@@ -517,7 +517,7 @@ mod tests {
 
     #[test]
     fn test_get_records_with_specific_columns_with_invalid_columns() {
-        let page_manager = Rc::new(RwLock::new(PageManager::new()));
+        let page_manager = Rc::new(RwLock::new(PageManager::new(":memory:")));
         let mut table_manager = TableManager::new(page_manager, "test").unwrap();
         table_manager.add_column("day", DataType::Integer).unwrap();
 
@@ -529,7 +529,7 @@ mod tests {
 
     #[test]
     fn test_initialize_and_load() {
-        let page_manager = Rc::new(RwLock::new(PageManager::new()));
+        let page_manager = Rc::new(RwLock::new(PageManager::new(":memory:")));
         let page = Rc::new(RwLock::new(InternalPage::new()));
 
         {

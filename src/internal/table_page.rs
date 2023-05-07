@@ -249,7 +249,7 @@ mod tests {
 
     #[test]
     fn test_inserting_and_reading_record_with_one_column() {
-        let page_manager = Rc::new(RwLock::new(PageManager::new()));
+        let page_manager = Rc::new(RwLock::new(PageManager::new(":memory:")));
         let column_definition = ColumnDefinition::new(1, DataType::Integer, "day".to_string());
         let mut table_page = TablePage::new(page_manager, vec![column_definition.clone()]);
 
@@ -265,7 +265,7 @@ mod tests {
 
     #[test]
     fn test_inserting_and_reading_record_with_multiple_columns() {
-        let page_manager = Rc::new(RwLock::new(PageManager::new()));
+        let page_manager = Rc::new(RwLock::new(PageManager::new(":memory:")));
         let mut table_page = TablePage::new(
             page_manager,
             vec![
@@ -289,7 +289,7 @@ mod tests {
 
     #[test]
     fn test_inserting_record_when_the_page_is_full() {
-        let page_manager = Rc::new(RwLock::new(PageManager::new()));
+        let page_manager = Rc::new(RwLock::new(PageManager::new(":memory:")));
         let column_definition = ColumnDefinition::new(1, DataType::Integer, "day".to_string());
 
         let mut table_page = TablePage::new(page_manager, vec![column_definition.clone()]);
@@ -305,7 +305,7 @@ mod tests {
 
     #[test]
     fn test_inserting_record_with_other_column_definitions() {
-        let page_manager = Rc::new(RwLock::new(PageManager::new()));
+        let page_manager = Rc::new(RwLock::new(PageManager::new(":memory:")));
         let column_definition = ColumnDefinition::new(1, DataType::Integer, "day".to_string());
         let mut table_page = TablePage::new(page_manager, vec![column_definition.clone()]);
 
@@ -315,7 +315,7 @@ mod tests {
 
     #[test]
     fn test_inserting_and_deleting_record() {
-        let page_manager = Rc::new(RwLock::new(PageManager::new()));
+        let page_manager = Rc::new(RwLock::new(PageManager::new(":memory:")));
         let mut table_page = TablePage::new(
             page_manager,
             vec![ColumnDefinition::new(
@@ -335,7 +335,7 @@ mod tests {
 
     #[test]
     fn test_record_size() {
-        let page_manager = Rc::new(RwLock::new(PageManager::new()));
+        let page_manager = Rc::new(RwLock::new(PageManager::new(":memory:")));
 
         {
             let table_page = TablePage::new(
@@ -364,7 +364,7 @@ mod tests {
 
     #[test]
     fn test_initialize_and_load() {
-        let page_manager = Rc::new(RwLock::new(PageManager::new()));
+        let page_manager = Rc::new(RwLock::new(PageManager::new(":memory:")));
         let page = Rc::new(RwLock::new(InternalPage::new()));
         let column_definitions = vec![
             ColumnDefinition::new(23, DataType::Integer, "day".to_string()),
@@ -387,7 +387,7 @@ mod tests {
 
     #[test]
     fn test_serialize_page_header() {
-        let page_manager = Rc::new(RwLock::new(PageManager::new()));
+        let page_manager = Rc::new(RwLock::new(PageManager::new(":memory:")));
         let table_page = TablePage::new(
             page_manager,
             vec![
