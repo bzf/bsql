@@ -1,9 +1,14 @@
-use std::{rc::Rc, sync::RwLock};
+use std::fs::File;
+use std::io::Write;
+use std::rc::Rc;
+use std::sync::RwLock;
 
 use super::InternalPage;
 
 pub type PageId = u32;
 pub type SharedInternalPage = Rc<RwLock<InternalPage>>;
+
+const FILENAME: &str = "bsql.db";
 
 pub struct PageManager {
     pages: Vec<SharedInternalPage>,
@@ -26,5 +31,18 @@ impl PageManager {
     /// Returns the page if it exists.
     pub fn fetch_page(&self, page_id: PageId) -> Option<SharedInternalPage> {
         self.pages.get(page_id as usize).cloned()
+    }
+
+    /// Write the pages to a disk on file.
+    pub fn commit(&self) {
+        println!("PageManager::commit()");
+        let mut file = File::create(FILENAME).unwrap();
+
+        for page in &self.pages {
+            let page = page.read().unwrap();
+
+            file.write_all(&page.metadata).unwrap();
+            file.write_all(&page.data).unwrap();
+        }
     }
 }

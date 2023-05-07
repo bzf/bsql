@@ -19,7 +19,7 @@ impl Manager {
             page_manager.create_page()
         };
 
-        Self::write_metadata_page(shared_page.clone(), vec![]);
+        Self::write_metadata_page(page_manager.clone(), shared_page.clone(), vec![]);
 
         Self {
             page_manager,
@@ -109,9 +109,16 @@ impl Manager {
             return Err(Error::DatabaseDoesNotExist(database_name.to_string()));
         };
 
-        database
+        let result = database
             .create_table(table_name, columns)
-            .map(|_table_id| QueryResult::CommandSuccessMessage("CREATE TABLE".to_string()))
+            .map(|_table_id| QueryResult::CommandSuccessMessage("CREATE TABLE".to_string()));
+
+        {
+            let page_manager = self.page_manager.read().unwrap();
+            page_manager.commit();
+        }
+
+        return result;
     }
 
     fn add_column(
@@ -134,14 +141,22 @@ impl Manager {
 
     fn create_database(&mut self, name: &str) -> Result<QueryResult, Error> {
         if !self.database_exists(name) {
-            let mut page_manager = self.page_manager.write().unwrap();
-            let (page_id, shared_page) = page_manager.create_page();
-
-            Database::initialize(self.page_manager.clone(), shared_page.clone(), name)?;
-
             let mut database_page_ids = self.database_page_ids();
-            database_page_ids.push(page_id);
-            Self::write_metadata_page(self.page.clone(), database_page_ids);
+
+            {
+                let mut page_manager = self.page_manager.write().unwrap();
+                let (page_id, shared_page) = page_manager.create_page();
+
+                Database::initialize(self.page_manager.clone(), shared_page.clone(), name)?;
+
+                database_page_ids.push(page_id);
+            }
+
+            Self::write_metadata_page(
+                self.page_manager.clone(),
+                self.page.clone(),
+                database_page_ids,
+            );
 
             Ok(QueryResult::CommandSuccessMessage(
                 "CREATE DATABASE".to_string(),
@@ -162,6 +177,11 @@ impl Manager {
             .iter_mut()
             .find(|d| d.name() == database_name)
             .ok_or(Error::DatabaseDoesNotExist(database_name.to_string()))?;
+
+        {
+            let page_manager = self.page_manager.read().unwrap();
+            page_manager.commit();
+        }
 
         database
             .insert_row(table_name, values)
@@ -233,19 +253,30 @@ impl Manager {
         return database_page_ids;
     }
 
-    fn write_metadata_page(shared_page: SharedInternalPage, database_page_ids: Vec<PageId>) {
-        let mut page = shared_page.write().unwrap();
-        let number_of_database_page_ids = database_page_ids.len();
-        page.metadata[0] = number_of_database_page_ids as u8;
+    fn write_metadata_page(
+        page_manager: Rc<RwLock<PageManager>>,
+        shared_page: SharedInternalPage,
+        database_page_ids: Vec<PageId>,
+    ) {
+        {
+            let mut page = shared_page.write().unwrap();
+            let number_of_database_page_ids = database_page_ids.len();
+            page.metadata[0] = number_of_database_page_ids as u8;
 
-        let database_page_ids_bytes: Vec<u8> = database_page_ids
-            .iter()
-            .map(|dpid| dpid.to_le_bytes())
-            .flatten()
-            .collect();
+            let database_page_ids_bytes: Vec<u8> = database_page_ids
+                .iter()
+                .map(|dpid| dpid.to_le_bytes())
+                .flatten()
+                .collect();
 
-        page.metadata[1..database_page_ids_bytes.len() + 1]
-            .copy_from_slice(&database_page_ids_bytes);
+            page.metadata[1..database_page_ids_bytes.len() + 1]
+                .copy_from_slice(&database_page_ids_bytes);
+        }
+
+        {
+            let page_manager = page_manager.read().unwrap();
+            page_manager.commit();
+        }
     }
 }
 
