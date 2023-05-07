@@ -8,7 +8,6 @@ const TABLE_MANAGER_PAGE_IDS_OFFSET: usize = 64;
 
 pub struct Database {
     page: SharedInternalPage,
-    table_manager_page_ids: Vec<PageId>,
     next_table_id: TableId,
 }
 
@@ -17,21 +16,14 @@ impl Database {
         let mut page_manager = super::page_manager().write().unwrap();
         let (_page_id, shared_page) = page_manager.create_page();
 
-        {
-            let mut page = shared_page.write().unwrap();
-
-            if name.len() >= 63 {
-                return Err(Error::DatabaseNameTooLong);
-            }
-
-            let name_length = name.len();
-            page.metadata[0] = name_length as u8;
-            page.metadata[1..name_length + 1].copy_from_slice(name.as_bytes());
+        if name.len() >= 63 {
+            return Err(Error::DatabaseNameTooLong);
         }
+
+        Self::write_metadata_page(shared_page.clone(), name, vec![]);
 
         Ok(Self {
             page: shared_page,
-            table_manager_page_ids: Vec::new(),
             next_table_id: 0,
         })
     }
@@ -76,7 +68,11 @@ impl Database {
                 table_manager.add_column(column_name, data_type.clone())?;
             }
 
-            self.table_manager_page_ids.push(page_id);
+            let mut table_manager_page_ids = self.table_manager_page_ids();
+            table_manager_page_ids.push(page_id);
+
+            Self::write_metadata_page(self.page.clone(), &self.name(), table_manager_page_ids);
+
             self.next_table_id += 1;
 
             Ok(table_id)
@@ -145,7 +141,7 @@ impl Database {
         let page_manager = super::page_manager().read().unwrap();
         let mut table_managers = Vec::new();
 
-        for page_id in &self.table_manager_page_ids {
+        for page_id in &self.table_manager_page_ids() {
             let shared_page = page_manager.fetch_page(*page_id).unwrap();
 
             let table_manager = TableManager::load(shared_page).unwrap();
@@ -153,6 +149,46 @@ impl Database {
         }
 
         return table_managers;
+    }
+
+    fn table_manager_page_ids(&self) -> Vec<PageId> {
+        let page = self.page.read().unwrap();
+        let number_of_databases = page.metadata[TABLE_MANAGER_PAGE_IDS_OFFSET] as u8;
+
+        let mut page_ids = vec![];
+
+        for i in 0..number_of_databases {
+            let start_index = (TABLE_MANAGER_PAGE_IDS_OFFSET as usize) + (i as usize) * 4 + 1;
+            let end_index = start_index + 4;
+
+            let bytes: &[u8; 4] = &page.metadata[start_index..end_index].try_into().unwrap();
+
+            page_ids.push(PageId::from_le_bytes(*bytes));
+        }
+
+        return page_ids;
+    }
+
+    fn write_metadata_page(shared_page: SharedInternalPage, name: &str, page_ids: Vec<PageId>) {
+        let mut page = shared_page.write().unwrap();
+
+        let name_length = name.len();
+        page.metadata[0] = name_length as u8;
+        page.metadata[1..name_length + 1].copy_from_slice(name.as_bytes());
+
+        // Write the page ids to the metadata.
+        let number_of_page_ids = page_ids.len();
+
+        page.metadata[TABLE_MANAGER_PAGE_IDS_OFFSET] = number_of_page_ids as u8;
+        let page_ids_bytes: Vec<u8> = page_ids
+            .iter()
+            .map(|pids| pids.to_le_bytes())
+            .flatten()
+            .collect();
+
+        page.metadata[TABLE_MANAGER_PAGE_IDS_OFFSET + 1
+            ..TABLE_MANAGER_PAGE_IDS_OFFSET + 1 + page_ids_bytes.len()]
+            .copy_from_slice(&page_ids_bytes);
     }
 }
 
