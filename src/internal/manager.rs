@@ -1,9 +1,11 @@
-use super::{parse, ColumnDefinition, Command, DataType, Database, Error, QueryResult, Value};
+use super::{
+    parse, ColumnDefinition, Command, DataType, Database, Error, PageId, QueryResult, Value,
+};
 use crate::internal::SharedInternalPage;
 
 pub struct Manager {
     page: SharedInternalPage,
-    databases: Vec<Database>,
+    database_page_ids: Vec<PageId>,
 }
 
 impl Manager {
@@ -13,7 +15,7 @@ impl Manager {
 
         Self {
             page: shared_page,
-            databases: Vec::new(),
+            database_page_ids: Vec::new(),
         }
     }
 
@@ -58,14 +60,14 @@ impl Manager {
     }
 
     pub fn database_names(&self) -> Vec<String> {
-        self.databases
+        self.databases()
             .iter()
             .map(|d| d.name().to_string())
             .collect()
     }
 
     pub fn database_table_names(&self, database_name: &str) -> Result<Vec<String>, Error> {
-        self.databases
+        self.databases()
             .iter()
             .find(|d| d.name() == database_name)
             .ok_or(Error::DatabaseDoesNotExist(database_name.to_string()))
@@ -77,7 +79,7 @@ impl Manager {
         database_name: &str,
         table_name: &str,
     ) -> Result<Vec<ColumnDefinition>, Error> {
-        self.databases
+        self.databases()
             .iter()
             .find(|d| d.name() == database_name)
             .ok_or(Error::DatabaseDoesNotExist(database_name.to_string()))
@@ -85,7 +87,7 @@ impl Manager {
     }
 
     pub fn database_exists(&self, key: &str) -> bool {
-        self.databases.iter().find(|d| d.name() == key).is_some()
+        self.databases().iter().find(|d| d.name() == key).is_some()
     }
 
     fn create_table(
@@ -94,7 +96,8 @@ impl Manager {
         table_name: &str,
         columns: Vec<(String, DataType)>,
     ) -> Result<QueryResult, Error> {
-        let Some(database) = self.databases.iter_mut().find(|d| d.name() == database_name) else {
+        let mut databases = self.databases();
+        let Some(database) = databases.iter_mut().find(|d| d.name() == database_name) else {
             return Err(Error::DatabaseDoesNotExist(database_name.to_string()));
         };
 
@@ -110,8 +113,8 @@ impl Manager {
         column_name: &str,
         data_type: DataType,
     ) -> Result<QueryResult, Error> {
-        let database = self
-            .databases
+        let mut databases = self.databases();
+        let database = databases
             .iter_mut()
             .find(|d| d.name() == database_name)
             .ok_or(Error::DatabaseDoesNotExist(database_name.to_string()))?;
@@ -123,7 +126,12 @@ impl Manager {
 
     fn create_database(&mut self, name: &str) -> Result<QueryResult, Error> {
         if !self.database_exists(name) {
-            self.databases.push(Database::new(name)?);
+            let mut page_manager = super::page_manager().write().unwrap();
+            let (page_id, shared_page) = page_manager.create_page();
+
+            Database::initialize(shared_page.clone(), name)?;
+
+            self.database_page_ids.push(page_id);
 
             Ok(QueryResult::CommandSuccessMessage(
                 "CREATE DATABASE".to_string(),
@@ -139,8 +147,8 @@ impl Manager {
         table_name: &str,
         values: Vec<Value>,
     ) -> Result<QueryResult, Error> {
-        let database = self
-            .databases
+        let mut databases = self.databases();
+        let database = databases
             .iter_mut()
             .find(|d| d.name() == database_name)
             .ok_or(Error::DatabaseDoesNotExist(database_name.to_string()))?;
@@ -151,8 +159,8 @@ impl Manager {
     }
 
     fn select_all(&self, database_name: &str, table_name: &str) -> Result<QueryResult, Error> {
-        let database = self
-            .databases
+        let databases = self.databases();
+        let database = databases
             .iter()
             .find(|d| d.name() == database_name)
             .ok_or(Error::DatabaseDoesNotExist(database_name.to_string()))?;
@@ -168,8 +176,8 @@ impl Manager {
         table_name: &str,
         columns: Vec<String>,
     ) -> Result<QueryResult, Error> {
-        let database = self
-            .databases
+        let databases = self.databases();
+        let database = databases
             .iter()
             .find(|d| d.name() == database_name)
             .ok_or(Error::DatabaseDoesNotExist(database_name.to_string()))?;
@@ -180,5 +188,38 @@ impl Manager {
                 columns.iter().map(|i| i.as_str()).collect::<Vec<&str>>(),
             )
             .map(|rows| QueryResult::RowResult(rows));
+    }
+
+    fn databases(&self) -> Vec<Database> {
+        let mut databases: Vec<Database> = Vec::new();
+
+        for database_page_id in &self.database_page_ids {
+            let database = {
+                let page_manager = super::page_manager().read().unwrap();
+                let shared_page = page_manager.fetch_page(*database_page_id as u32).unwrap();
+                Database::load(shared_page).unwrap()
+            };
+
+            databases.push(database);
+        }
+
+        return databases;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_list_databases() {
+        let mut manager = Manager::new();
+        manager.create_database("hello").unwrap();
+        manager.create_database("world").unwrap();
+
+        assert_eq!(
+            vec!["hello".to_string(), "world".to_string()],
+            manager.database_names()
+        );
     }
 }
