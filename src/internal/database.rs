@@ -16,12 +16,23 @@ impl Database {
         let mut page_manager = super::page_manager().write().unwrap();
         let (_page_id, shared_page) = page_manager.create_page();
 
+        return Self::initialize(shared_page, name);
+    }
+
+    pub fn initialize(shared_page: SharedInternalPage, name: &str) -> Result<Self, Error> {
         if name.len() >= 63 {
             return Err(Error::DatabaseNameTooLong);
         }
 
         Self::write_metadata_page(shared_page.clone(), name, vec![]);
 
+        Ok(Self {
+            page: shared_page,
+            next_table_id: 0,
+        })
+    }
+
+    pub fn load(shared_page: SharedInternalPage) -> Result<Self, Error> {
         Ok(Self {
             page: shared_page,
             next_table_id: 0,
@@ -194,7 +205,11 @@ impl Database {
 
 #[cfg(test)]
 mod tests {
+    use std::rc::Rc;
+    use std::sync::RwLock;
+
     use super::*;
+    use crate::internal::InternalPage;
 
     #[test]
     fn test_creating_new_table_without_columns() {
@@ -384,5 +399,29 @@ mod tests {
                 .first()
                 .expect("Failed to fetch the first record")
         );
+    }
+
+    #[test]
+    fn test_initialize_and_load() {
+        let page = Rc::new(RwLock::new(InternalPage::new()));
+
+        {
+            let mut database = Database::initialize(page.clone(), "my database name")
+                .expect("Failed to initialize database");
+
+            database
+                .create_table("my table", vec![])
+                .expect("Failed to create table");
+
+            assert_eq!("my database name", database.name());
+            assert_eq!(vec!["my table"], database.table_names());
+        }
+
+        {
+            let database = Database::load(page).expect("Failed to load database");
+
+            assert_eq!("my database name", database.name());
+            assert_eq!(vec!["my table"], database.table_names());
+        }
     }
 }
