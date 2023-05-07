@@ -19,7 +19,7 @@ pub struct TablePage {
 }
 
 impl TablePage {
-    pub fn new(column_definitions: Vec<ColumnDefinition>) -> Self {
+    fn new(column_definitions: Vec<ColumnDefinition>) -> Self {
         let mut page_manager = super::page_manager().write().unwrap();
         let (_page_id, shared_page) = page_manager.create_page();
 
