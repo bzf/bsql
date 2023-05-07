@@ -25,19 +25,88 @@ impl TablePage {
         let mut page_manager = super::page_manager().write().unwrap();
         let (_page_id, shared_page) = page_manager.create_page();
 
+        return Self::initialize(shared_page, column_definitions);
+    }
+
+    /// Initialize a `SharedInternalPage` for this `TablePage`
+    pub fn initialize(
+        shared_page: SharedInternalPage,
+        column_definitions: Vec<ColumnDefinition>,
+    ) -> Self {
         {
             let mut page = shared_page.write().unwrap();
 
-            let column_definition_bytes: Vec<u8> = column_definitions
+            let column_definitions_bytes: Vec<u8> = column_definitions
                 .iter()
                 .map(|cd| cd.to_raw_bytes())
                 .flatten()
                 .collect();
 
             // Store the length of the column definitions in the metadata page after the
-            page.metadata[32..40].copy_from_slice(&column_definition_bytes.len().to_be_bytes());
-            page.metadata[40..40 + column_definition_bytes.len()]
-                .copy_from_slice(&column_definition_bytes);
+            page.metadata[32..40].copy_from_slice(&column_definitions_bytes.len().to_be_bytes());
+            page.metadata[40..40 + column_definitions_bytes.len()]
+                .copy_from_slice(&column_definitions_bytes);
+        }
+
+        let slots_index: BitmapIndex<255> = {
+            let bytes = Rc::new(RefCell::new(
+                shared_page.write().unwrap().metadata[0..32]
+                    .try_into()
+                    .unwrap(),
+            ));
+            BitmapIndex::from_raw(bytes).unwrap()
+        };
+
+        Self {
+            column_definitions,
+            slots_index,
+
+            page: shared_page,
+        }
+    }
+
+    /// Load a `TablePage` with the data from the `SharedInternalPage`
+    pub fn load(shared_page: SharedInternalPage) -> Self {
+        let mut column_definitions = Vec::new();
+
+        {
+            let page = shared_page.read().unwrap();
+
+            let column_definitions_byte_length =
+                usize::from_be_bytes(page.metadata[32..40].try_into().unwrap());
+            println!(
+                "column_definition_byte_length: {:?}",
+                column_definitions_byte_length
+            );
+
+            let column_definitions_slice = &page.metadata[40..40 + column_definitions_byte_length];
+            println!("column_definition_slice: {:?}", column_definitions_slice);
+
+            let mut start_cursor = 0;
+
+            while start_cursor < column_definitions_slice.len() {
+                let column_definition_byte_length = column_definitions_slice[start_cursor] as usize;
+                println!(
+                    "column_definition_byte_length: {}",
+                    column_definition_byte_length
+                );
+                start_cursor += 1;
+
+                let column_definition_byte_slice = &column_definitions_slice
+                    [start_cursor..start_cursor + column_definition_byte_length];
+                start_cursor += column_definition_byte_length;
+
+                println!(
+                    "column_definition_byte_slice: {:?}",
+                    column_definition_byte_slice
+                );
+
+                let column_definition =
+                    ColumnDefinition::from_raw_bytes(column_definition_byte_slice).unwrap();
+                println!("column_definition: {:?}", column_definition);
+
+                column_definitions.push(column_definition);
+            }
         }
 
         let slots_index: BitmapIndex<255> = {
@@ -164,7 +233,10 @@ impl TablePage {
 
 #[cfg(test)]
 mod tests {
-    use crate::internal::DataType;
+    use std::sync::RwLock;
+
+    use super::DataType;
+    use crate::internal::InternalPage;
 
     use super::*;
 
@@ -262,6 +334,20 @@ mod tests {
 
             assert_eq!(2, table_page.record_size());
         }
+    }
+
+    #[test]
+    fn test_initialize_and_load() {
+        let page = Rc::new(RwLock::new(InternalPage::new()));
+        let column_definitions = vec![
+            ColumnDefinition::new(23, DataType::Integer, "day".to_string()),
+            ColumnDefinition::new(11, DataType::Integer, "month".to_string()),
+        ];
+
+        TablePage::initialize(page.clone(), column_definitions.clone());
+
+        let table_page = TablePage::load(page.clone());
+        assert_eq!(&column_definitions, table_page.column_definitions())
     }
 
     #[test]
