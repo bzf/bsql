@@ -3,4 +3,4 @@
 
 mod internal;
 
-pub use internal::{ColumnDefinition, Error, Manager, QueryResult, RowResult};
+pub use internal::{ColumnDefinition, Error, Manager, PageManager, QueryResult, RowResult};

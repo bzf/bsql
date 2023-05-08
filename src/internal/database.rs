@@ -1,3 +1,8 @@
+use std::rc::Rc;
+use std::sync::RwLock;
+
+use crate::PageManager;
+
 use super::{
     ColumnDefinition, DataType, Error, PageId, RowResult, SharedInternalPage, TableManager, Value,
 };
@@ -7,19 +12,27 @@ type TableId = u64;
 const TABLE_MANAGER_PAGE_IDS_OFFSET: usize = 64;
 
 pub struct Database {
+    page_manager: Rc<RwLock<PageManager>>,
+
     page: SharedInternalPage,
     next_table_id: TableId,
 }
 
 impl Database {
-    pub fn new(name: &str) -> Result<Self, Error> {
-        let mut page_manager = super::page_manager().write().unwrap();
-        let (_page_id, shared_page) = page_manager.create_page();
+    pub fn new(page_manager: Rc<RwLock<PageManager>>, name: &str) -> Result<Self, Error> {
+        let (_page_id, shared_page) = {
+            let mut page_manager = page_manager.write().unwrap();
+            page_manager.create_page()
+        };
 
-        return Self::initialize(shared_page, name);
+        return Self::initialize(page_manager, shared_page, name);
     }
 
-    pub fn initialize(shared_page: SharedInternalPage, name: &str) -> Result<Self, Error> {
+    pub fn initialize(
+        page_manager: Rc<RwLock<PageManager>>,
+        shared_page: SharedInternalPage,
+        name: &str,
+    ) -> Result<Self, Error> {
         if name.len() >= 63 {
             return Err(Error::DatabaseNameTooLong);
         }
@@ -27,13 +40,20 @@ impl Database {
         Self::write_metadata_page(shared_page.clone(), name, vec![]);
 
         Ok(Self {
+            page_manager,
+
             page: shared_page,
             next_table_id: 0,
         })
     }
 
-    pub fn load(shared_page: SharedInternalPage) -> Result<Self, Error> {
+    pub fn load(
+        page_manager: Rc<RwLock<PageManager>>,
+        shared_page: SharedInternalPage,
+    ) -> Result<Self, Error> {
         Ok(Self {
+            page_manager,
+
             page: shared_page,
             next_table_id: 0,
         })
@@ -71,10 +91,13 @@ impl Database {
         if !self.table_exists(table_name) {
             let table_id = self.next_table_id;
 
-            let mut page_manager = super::page_manager().write().unwrap();
-            let (page_id, shared_page) = page_manager.create_page();
+            let (page_id, shared_page) = {
+                let mut page_manager = self.page_manager.write().unwrap();
+                page_manager.create_page()
+            };
 
-            let mut table_manager = TableManager::initialize(shared_page, table_name)?;
+            let mut table_manager =
+                TableManager::initialize(self.page_manager.clone(), shared_page, table_name)?;
             for (column_name, data_type) in columns.iter() {
                 table_manager.add_column(column_name, data_type.clone())?;
             }
@@ -149,13 +172,13 @@ impl Database {
     }
 
     fn table_managers(&self) -> Vec<TableManager> {
-        let page_manager = super::page_manager().read().unwrap();
+        let page_manager = self.page_manager.read().unwrap();
         let mut table_managers = Vec::new();
 
         for page_id in &self.table_manager_page_ids() {
             let shared_page = page_manager.fetch_page(*page_id).unwrap();
 
-            let table_manager = TableManager::load(shared_page).unwrap();
+            let table_manager = TableManager::load(self.page_manager.clone(), shared_page).unwrap();
             table_managers.push(table_manager);
         }
 
@@ -213,7 +236,8 @@ mod tests {
 
     #[test]
     fn test_creating_new_table_without_columns() {
-        let mut database = Database::new("test").unwrap();
+        let page_manager = Rc::new(RwLock::new(PageManager::new()));
+        let mut database = Database::new(page_manager, "test").unwrap();
 
         let result = database.create_table("foobar", vec![]);
 
@@ -222,7 +246,8 @@ mod tests {
 
     #[test]
     fn test_creating_new_table_with_columns() {
-        let mut database = Database::new("test").unwrap();
+        let page_manager = Rc::new(RwLock::new(PageManager::new()));
+        let mut database = Database::new(page_manager, "test").unwrap();
 
         let result =
             database.create_table("foobar", vec![("hello".to_string(), DataType::Integer)]);
@@ -232,7 +257,8 @@ mod tests {
 
     #[test]
     fn test_creating_table_that_already_exists() {
-        let mut database = Database::new("test").unwrap();
+        let page_manager = Rc::new(RwLock::new(PageManager::new()));
+        let mut database = Database::new(page_manager, "test").unwrap();
         let table_name = "new_database";
         assert!(database.create_table(table_name, vec![]).is_ok());
 
@@ -246,7 +272,8 @@ mod tests {
 
     #[test]
     fn test_adding_column_to_table() {
-        let mut database = Database::new("test").unwrap();
+        let page_manager = Rc::new(RwLock::new(PageManager::new()));
+        let mut database = Database::new(page_manager, "test").unwrap();
         let table_name = "new_database";
         assert!(database.create_table(table_name, vec![]).is_ok());
 
@@ -257,7 +284,8 @@ mod tests {
 
     #[test]
     fn inserting_row_to_a_table() {
-        let mut database = Database::new("test").unwrap();
+        let page_manager = Rc::new(RwLock::new(PageManager::new()));
+        let mut database = Database::new(page_manager, "test").unwrap();
         let table_name = "new_table";
         assert!(database
             .create_table(table_name, vec![("age".to_string(), DataType::Integer)])
@@ -270,7 +298,8 @@ mod tests {
 
     #[test]
     fn inserting_row_with_different_len_values() {
-        let mut database = Database::new("test").unwrap();
+        let page_manager = Rc::new(RwLock::new(PageManager::new()));
+        let mut database = Database::new(page_manager, "test").unwrap();
         let table_name = "new_table";
         assert!(database
             .create_table(table_name, vec![("age".to_string(), DataType::Integer)])
@@ -283,7 +312,8 @@ mod tests {
 
     #[test]
     fn select_all_from_table() {
-        let mut database = Database::new("test").unwrap();
+        let page_manager = Rc::new(RwLock::new(PageManager::new()));
+        let mut database = Database::new(page_manager, "test").unwrap();
         let table_name = "new_table";
         assert!(database
             .create_table(table_name, vec![("age".to_string(), DataType::Integer)])
@@ -302,7 +332,8 @@ mod tests {
 
     #[test]
     fn select_all_from_table_with_different_columns_over_time() {
-        let mut database = Database::new("test").unwrap();
+        let page_manager = Rc::new(RwLock::new(PageManager::new()));
+        let mut database = Database::new(page_manager, "test").unwrap();
         let table_name = "new_table";
         assert!(database
             .create_table(table_name, vec![("age".to_string(), DataType::Integer)])
@@ -330,7 +361,8 @@ mod tests {
 
     #[test]
     fn select_all_from_empty_table() {
-        let mut database = Database::new("test").unwrap();
+        let page_manager = Rc::new(RwLock::new(PageManager::new()));
+        let mut database = Database::new(page_manager, "test").unwrap();
         let table_name = "new_table";
         assert!(database.create_table(table_name, vec![]).is_ok());
 
@@ -344,7 +376,8 @@ mod tests {
 
     #[test]
     fn select_from_table() {
-        let mut database = Database::new("test").unwrap();
+        let page_manager = Rc::new(RwLock::new(PageManager::new()));
+        let mut database = Database::new(page_manager, "test").unwrap();
         let table_name = "new_table";
         assert!(database
             .create_table(
@@ -369,7 +402,8 @@ mod tests {
 
     #[test]
     fn select_with_column_that_doesnt_exist() {
-        let mut database = Database::new("test").unwrap();
+        let page_manager = Rc::new(RwLock::new(PageManager::new()));
+        let mut database = Database::new(page_manager, "test").unwrap();
         let table_name = "new_table";
         assert!(database.create_table(table_name, vec![]).is_ok());
 
@@ -380,7 +414,8 @@ mod tests {
 
     #[test]
     fn test_inserting_record_and_getting_it_back_out() {
-        let mut table_manager = TableManager::new("test").unwrap();
+        let page_manager = Rc::new(RwLock::new(PageManager::new()));
+        let mut table_manager = TableManager::new(page_manager, "test").unwrap();
         table_manager.add_column("day", DataType::Integer).unwrap();
 
         let record_id = table_manager
@@ -403,11 +438,13 @@ mod tests {
 
     #[test]
     fn test_initialize_and_load() {
+        let page_manager = Rc::new(RwLock::new(PageManager::new()));
         let page = Rc::new(RwLock::new(InternalPage::new()));
 
         {
-            let mut database = Database::initialize(page.clone(), "my database name")
-                .expect("Failed to initialize database");
+            let mut database =
+                Database::initialize(page_manager.clone(), page.clone(), "my database name")
+                    .expect("Failed to initialize database");
 
             database
                 .create_table("my table", vec![])
@@ -418,7 +455,7 @@ mod tests {
         }
 
         {
-            let database = Database::load(page).expect("Failed to load database");
+            let database = Database::load(page_manager, page).expect("Failed to load database");
 
             assert_eq!("my database name", database.name());
             assert_eq!(vec!["my table"], database.table_names());

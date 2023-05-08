@@ -1,7 +1,4 @@
-use std::{
-    rc::Rc,
-    sync::{Once, RwLock},
-};
+use std::{rc::Rc, sync::RwLock};
 
 use super::InternalPage;
 
@@ -13,7 +10,7 @@ pub struct PageManager {
 }
 
 impl PageManager {
-    fn new() -> Self {
+    pub fn new() -> Self {
         PageManager { pages: Vec::new() }
     }
 
@@ -29,19 +26,5 @@ impl PageManager {
     /// Returns the page if it exists.
     pub fn fetch_page(&self, page_id: PageId) -> Option<SharedInternalPage> {
         self.pages.get(page_id as usize).cloned()
-    }
-}
-
-pub fn page_manager() -> &'static RwLock<PageManager> {
-    static mut SINGLETON: *const RwLock<PageManager> = std::ptr::null();
-    static ONCE: Once = Once::new();
-
-    unsafe {
-        ONCE.call_once(|| {
-            let singleton = RwLock::new(PageManager::new());
-            SINGLETON = Box::into_raw(Box::new(singleton));
-        });
-
-        &*SINGLETON
     }
 }

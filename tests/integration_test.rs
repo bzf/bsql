@@ -1,8 +1,11 @@
-use bsql::{Manager, QueryResult};
+use std::{rc::Rc, sync::RwLock};
+
+use bsql::{Manager, PageManager, QueryResult};
 
 #[test]
 fn test_creating_database_table_and_inserting_rows() {
-    let mut manager = Manager::new();
+    let page_manager = Rc::new(RwLock::new(PageManager::new()));
+    let mut manager = Manager::new(page_manager);
 
     let database_name = "drinkr";
     manager

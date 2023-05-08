@@ -1,20 +1,30 @@
+use std::rc::Rc;
+use std::sync::RwLock;
+
 use super::{
-    parse, ColumnDefinition, Command, DataType, Database, Error, PageId, QueryResult, Value,
+    parse, ColumnDefinition, Command, DataType, Database, Error, PageId, PageManager, QueryResult,
+    Value,
 };
 use crate::internal::SharedInternalPage;
 
 pub struct Manager {
+    page_manager: Rc<RwLock<PageManager>>,
     page: SharedInternalPage,
 }
 
 impl Manager {
-    pub fn new() -> Self {
-        let mut page_manager = super::page_manager().write().unwrap();
-        let (_page_id, shared_page) = page_manager.create_page();
+    pub fn new(page_manager: Rc<RwLock<PageManager>>) -> Self {
+        let (_page_id, shared_page) = {
+            let mut page_manager = page_manager.write().unwrap();
+            page_manager.create_page()
+        };
 
         Self::write_metadata_page(shared_page.clone(), vec![]);
 
-        Self { page: shared_page }
+        Self {
+            page_manager,
+            page: shared_page,
+        }
     }
 
     pub fn execute(&mut self, database_name: &str, query: &str) -> Result<QueryResult, Error> {
@@ -124,10 +134,10 @@ impl Manager {
 
     fn create_database(&mut self, name: &str) -> Result<QueryResult, Error> {
         if !self.database_exists(name) {
-            let mut page_manager = super::page_manager().write().unwrap();
+            let mut page_manager = self.page_manager.write().unwrap();
             let (page_id, shared_page) = page_manager.create_page();
 
-            Database::initialize(shared_page.clone(), name)?;
+            Database::initialize(self.page_manager.clone(), shared_page.clone(), name)?;
 
             let mut database_page_ids = self.database_page_ids();
             database_page_ids.push(page_id);
@@ -195,10 +205,10 @@ impl Manager {
         let mut databases = Vec::new();
 
         for database_page_id in &database_page_ids {
-            let page_manager = super::page_manager().read().unwrap();
+            let page_manager = self.page_manager.read().unwrap();
             let page = page_manager.fetch_page(*database_page_id).unwrap();
 
-            let database = Database::load(page).unwrap();
+            let database = Database::load(self.page_manager.clone(), page).unwrap();
             databases.push(database);
         }
 
@@ -245,7 +255,8 @@ mod tests {
 
     #[test]
     fn test_list_databases() {
-        let mut manager = Manager::new();
+        let page_manager = Rc::new(RwLock::new(PageManager::new()));
+        let mut manager = Manager::new(page_manager);
         manager.create_database("hello").unwrap();
         manager.create_database("world").unwrap();
 

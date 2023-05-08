@@ -1,15 +1,19 @@
 #![allow(incomplete_features)]
 #![feature(adt_const_params, generic_const_exprs)]
 
-use std::io::Write;
+use std::{io::Write, rc::Rc, sync::RwLock};
 
 mod print_table;
 
-use bsql::{ColumnDefinition, Error, Manager, QueryResult};
+use bsql::{ColumnDefinition, Error, Manager, PageManager, QueryResult};
 use print_table::{print_row_result, print_table};
 
 fn main() {
-    let mut database_manager = Manager::new();
+    // TODO: Pass along the page manager here instead of using a singleton.
+    // Could use the :memory: filename (like SQLite) to not write to disk at all.
+    let page_manager = Rc::new(RwLock::new(PageManager::new()));
+
+    let mut database_manager = Manager::new(page_manager);
     let mut active_database = String::new();
 
     loop {

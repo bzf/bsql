@@ -1,6 +1,8 @@
+use std::{rc::Rc, sync::RwLock};
+
 use super::{
     page_manager::SharedInternalPage, BitmapIndex, ColumnDefinition, DataType, Error, PageId,
-    RowResult, TablePage, Value,
+    PageManager, RowResult, TablePage, Value,
 };
 
 type ColumnId = u8;
@@ -10,33 +12,51 @@ const COLUMN_TABLE_NAME_RANGE: std::ops::Range<usize> = 32..96;
 const COLUMN_DEFINITION_START_OFFSET: usize = 96;
 
 pub struct TableManager {
+    page_manager: Rc<RwLock<PageManager>>,
+
     page: SharedInternalPage,
 }
 
 impl TableManager {
-    pub fn new(table_name: &str) -> Result<Self, Error> {
+    pub fn new(page_manager: Rc<RwLock<PageManager>>, table_name: &str) -> Result<Self, Error> {
         if table_name.len() >= COLUMN_TABLE_NAME_RANGE.len() - 1 {
             return Err(Error::TableNameTooLong);
         }
 
-        let mut page_manager = super::page_manager().write().unwrap();
-        let (_page_id, shared_page) = page_manager.create_page();
+        let (_page_id, shared_page) = {
+            let mut page_manager = page_manager.write().unwrap();
+            page_manager.create_page()
+        };
 
-        return Self::initialize(shared_page.clone(), table_name);
+        return Self::initialize(page_manager, shared_page.clone(), table_name);
     }
 
-    pub fn initialize(shared_page: SharedInternalPage, table_name: &str) -> Result<Self, Error> {
+    pub fn initialize(
+        page_manager: Rc<RwLock<PageManager>>,
+        shared_page: SharedInternalPage,
+        table_name: &str,
+    ) -> Result<Self, Error> {
         if table_name.len() >= COLUMN_TABLE_NAME_RANGE.len() - 1 {
             return Err(Error::TableNameTooLong);
         }
 
         Self::write_metadata_page(shared_page.clone(), table_name, &vec![], &vec![]);
 
-        Ok(Self { page: shared_page })
+        Ok(Self {
+            page_manager,
+
+            page: shared_page,
+        })
     }
 
-    pub fn load(shared_page: SharedInternalPage) -> Result<Self, Error> {
-        Ok(Self { page: shared_page })
+    pub fn load(
+        page_manager: Rc<RwLock<PageManager>>,
+        shared_page: SharedInternalPage,
+    ) -> Result<Self, Error> {
+        Ok(Self {
+            page_manager,
+            page: shared_page,
+        })
     }
 
     pub fn name(&self) -> String {
@@ -134,9 +154,9 @@ impl TableManager {
         println!("TableManager.get_record({}, {})", page_id, record_slot);
 
         let table_page = {
-            let page_manager = super::page_manager().read().unwrap();
+            let page_manager = self.page_manager.read().unwrap();
             let shared_page = page_manager.fetch_page(page_id as u32).unwrap();
-            TablePage::load(shared_page)
+            TablePage::load(self.page_manager.clone(), shared_page)
         };
 
         let page_columns = table_page.column_definitions();
@@ -152,9 +172,9 @@ impl TableManager {
 
         for page_id in &self.page_ids() {
             let table_page = {
-                let page_manager = super::page_manager().read().unwrap();
+                let page_manager = self.page_manager.read().unwrap();
                 let shared_page = page_manager.fetch_page(*page_id as u32).unwrap();
-                TablePage::load(shared_page)
+                TablePage::load(self.page_manager.clone(), shared_page)
             };
 
             let page_columns = table_page.column_definitions();
@@ -207,9 +227,9 @@ impl TableManager {
 
         for page_id in &page_ids {
             // Load the `TablePage` from the `page_id`
-            let page_manager = super::page_manager().read().unwrap();
+            let page_manager = self.page_manager.read().unwrap();
             let page = page_manager.fetch_page(*page_id).unwrap();
-            let table_page = TablePage::load(page);
+            let table_page = TablePage::load(self.page_manager.clone(), page);
 
             // If this `TablePage` have different columns than us, skip to the next one.
             if *table_page.column_definitions() != self.column_definitions() {
@@ -219,10 +239,14 @@ impl TableManager {
             // Check if the page is full, otherwise return it.
             if table_page.is_full() {
                 // Create a new page and return that.
-                let mut page_manager = super::page_manager().write().unwrap();
+                let mut page_manager = self.page_manager.write().unwrap();
                 let (page_id, shared_page) = page_manager.create_page();
 
-                let table_page = TablePage::initialize(shared_page, self.column_definitions());
+                let table_page = TablePage::initialize(
+                    self.page_manager.clone(),
+                    shared_page,
+                    self.column_definitions(),
+                );
                 page_ids.push(page_id);
 
                 Self::write_metadata_page(
@@ -239,10 +263,14 @@ impl TableManager {
         }
 
         // Create a new page and return that.
-        let mut page_manager = super::page_manager().write().unwrap();
+        let mut page_manager = self.page_manager.write().unwrap();
         let (page_id, shared_page) = page_manager.create_page();
 
-        let table_page = TablePage::initialize(shared_page, self.column_definitions());
+        let table_page = TablePage::initialize(
+            self.page_manager.clone(),
+            shared_page,
+            self.column_definitions(),
+        );
         page_ids.push(page_id);
 
         Self::write_metadata_page(
@@ -394,13 +422,15 @@ mod tests {
 
     #[test]
     fn fetching_table_name_works() {
-        let table_manager = TableManager::new("test").unwrap();
+        let page_manager = Rc::new(RwLock::new(PageManager::new()));
+        let table_manager = TableManager::new(page_manager, "test").unwrap();
         assert_eq!("test", table_manager.name());
     }
 
     #[test]
     fn get_records_for_pages_with_different_columns() {
-        let mut table_manager = TableManager::new("test").unwrap();
+        let page_manager = Rc::new(RwLock::new(PageManager::new()));
+        let mut table_manager = TableManager::new(page_manager, "test").unwrap();
         table_manager.add_column("day", DataType::Integer).unwrap();
         assert!(table_manager
             .insert_record(vec![Value::Integer(31)])
@@ -431,7 +461,8 @@ mod tests {
 
     #[test]
     fn test_get_records_with_specific_columns() {
-        let mut table_manager = TableManager::new("test").unwrap();
+        let page_manager = Rc::new(RwLock::new(PageManager::new()));
+        let mut table_manager = TableManager::new(page_manager, "test").unwrap();
         table_manager.add_column("day", DataType::Integer).unwrap();
         assert!(table_manager
             .insert_record(vec![Value::Integer(13)])
@@ -466,7 +497,8 @@ mod tests {
 
     #[test]
     fn test_getting_a_single_record_works() {
-        let mut table_manager = TableManager::new("test").unwrap();
+        let page_manager = Rc::new(RwLock::new(PageManager::new()));
+        let mut table_manager = TableManager::new(page_manager, "test").unwrap();
         table_manager.add_column("day", DataType::Integer).unwrap();
 
         let record_id = table_manager
@@ -485,7 +517,8 @@ mod tests {
 
     #[test]
     fn test_get_records_with_specific_columns_with_invalid_columns() {
-        let mut table_manager = TableManager::new("test").unwrap();
+        let page_manager = Rc::new(RwLock::new(PageManager::new()));
+        let mut table_manager = TableManager::new(page_manager, "test").unwrap();
         table_manager.add_column("day", DataType::Integer).unwrap();
 
         assert_eq!(
@@ -496,16 +529,19 @@ mod tests {
 
     #[test]
     fn test_initialize_and_load() {
+        let page_manager = Rc::new(RwLock::new(PageManager::new()));
         let page = Rc::new(RwLock::new(InternalPage::new()));
 
         {
             let table_manager =
-                TableManager::initialize(page.clone(), "my_table").expect("Failed to initialize");
+                TableManager::initialize(page_manager.clone(), page.clone(), "my_table")
+                    .expect("Failed to initialize");
 
             assert_eq!(table_manager.name(), "my_table");
         }
 
-        let table_manager = TableManager::load(page.clone()).expect("Failed to load TableManager");
+        let table_manager =
+            TableManager::load(page_manager, page.clone()).expect("Failed to load TableManager");
         assert_eq!(table_manager.name(), "my_table");
     }
 }

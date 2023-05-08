@@ -16,7 +16,7 @@ mod value;
 use bitmap_index::BitmapIndex;
 use database::Database;
 use page::InternalPage;
-use page_manager::{page_manager, PageId, SharedInternalPage};
+use page_manager::{PageId, SharedInternalPage};
 use table_manager::TableManager;
 use table_page::TablePage;
 
@@ -24,6 +24,7 @@ pub use column_definition::ColumnDefinition;
 pub use data_type::DataType;
 pub use error::Error;
 pub use manager::Manager;
+pub use page_manager::PageManager;
 pub use parser::{parse, Command, Token};
 pub use query_result::QueryResult;
 pub use row_result::RowResult;

@@ -1,7 +1,8 @@
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::sync::RwLock;
 
-use super::{BitmapIndex, ColumnDefinition, DataType, SharedInternalPage, Value};
+use super::{BitmapIndex, ColumnDefinition, DataType, PageManager, SharedInternalPage, Value};
 
 /// A `TablePage` is a struct that represents a full page of data + metadata of records (and their
 /// columns) that are stored in a table.
@@ -19,15 +20,21 @@ pub struct TablePage {
 }
 
 impl TablePage {
-    fn new(column_definitions: Vec<ColumnDefinition>) -> Self {
-        let mut page_manager = super::page_manager().write().unwrap();
-        let (_page_id, shared_page) = page_manager.create_page();
+    fn new(
+        page_manager: Rc<RwLock<PageManager>>,
+        column_definitions: Vec<ColumnDefinition>,
+    ) -> Self {
+        let (_page_id, shared_page) = {
+            let mut page_manager = page_manager.write().unwrap();
+            page_manager.create_page()
+        };
 
-        return Self::initialize(shared_page, column_definitions);
+        return Self::initialize(page_manager, shared_page, column_definitions);
     }
 
     /// Initialize a `SharedInternalPage` for this `TablePage`
     pub fn initialize(
+        page_manager: Rc<RwLock<PageManager>>,
         shared_page: SharedInternalPage,
         column_definitions: Vec<ColumnDefinition>,
     ) -> Self {
@@ -53,7 +60,7 @@ impl TablePage {
     }
 
     /// Load a `TablePage` with the data from the `SharedInternalPage`
-    pub fn load(shared_page: SharedInternalPage) -> Self {
+    pub fn load(page_manager: Rc<RwLock<PageManager>>, shared_page: SharedInternalPage) -> Self {
         let mut column_definitions = Vec::new();
 
         {
@@ -242,8 +249,9 @@ mod tests {
 
     #[test]
     fn test_inserting_and_reading_record_with_one_column() {
+        let page_manager = Rc::new(RwLock::new(PageManager::new()));
         let column_definition = ColumnDefinition::new(1, DataType::Integer, "day".to_string());
-        let mut table_page = TablePage::new(vec![column_definition.clone()]);
+        let mut table_page = TablePage::new(page_manager, vec![column_definition.clone()]);
 
         let record_id = table_page.insert_record(vec![Value::Integer(3)]);
         assert!(
@@ -257,10 +265,14 @@ mod tests {
 
     #[test]
     fn test_inserting_and_reading_record_with_multiple_columns() {
-        let mut table_page = TablePage::new(vec![
-            ColumnDefinition::new(1, DataType::Integer, "day".to_string()),
-            ColumnDefinition::new(2, DataType::Integer, "month".to_string()),
-        ]);
+        let page_manager = Rc::new(RwLock::new(PageManager::new()));
+        let mut table_page = TablePage::new(
+            page_manager,
+            vec![
+                ColumnDefinition::new(1, DataType::Integer, "day".to_string()),
+                ColumnDefinition::new(2, DataType::Integer, "month".to_string()),
+            ],
+        );
 
         let record_id = table_page.insert_record(vec![Value::Integer(3), Value::Integer(5)]);
         assert!(
@@ -277,9 +289,10 @@ mod tests {
 
     #[test]
     fn test_inserting_record_when_the_page_is_full() {
+        let page_manager = Rc::new(RwLock::new(PageManager::new()));
         let column_definition = ColumnDefinition::new(1, DataType::Integer, "day".to_string());
 
-        let mut table_page = TablePage::new(vec![column_definition.clone()]);
+        let mut table_page = TablePage::new(page_manager, vec![column_definition.clone()]);
         for _ in 0..=u8::MAX {
             table_page
                 .insert_record(vec![Value::Integer(3)])
@@ -292,8 +305,9 @@ mod tests {
 
     #[test]
     fn test_inserting_record_with_other_column_definitions() {
+        let page_manager = Rc::new(RwLock::new(PageManager::new()));
         let column_definition = ColumnDefinition::new(1, DataType::Integer, "day".to_string());
-        let mut table_page = TablePage::new(vec![column_definition.clone()]);
+        let mut table_page = TablePage::new(page_manager, vec![column_definition.clone()]);
 
         let record_id = table_page.insert_record(vec![Value::Integer(3), Value::Integer(1)]);
         assert_eq!(None, record_id);
@@ -301,11 +315,15 @@ mod tests {
 
     #[test]
     fn test_inserting_and_deleting_record() {
-        let mut table_page = TablePage::new(vec![ColumnDefinition::new(
-            1,
-            DataType::Integer,
-            "day".to_string(),
-        )]);
+        let page_manager = Rc::new(RwLock::new(PageManager::new()));
+        let mut table_page = TablePage::new(
+            page_manager,
+            vec![ColumnDefinition::new(
+                1,
+                DataType::Integer,
+                "day".to_string(),
+            )],
+        );
 
         let record_id = table_page.insert_record(vec![Value::Integer(3)]);
         assert!(record_id.is_some());
@@ -317,20 +335,28 @@ mod tests {
 
     #[test]
     fn test_record_size() {
+        let page_manager = Rc::new(RwLock::new(PageManager::new()));
+
         {
-            let table_page = TablePage::new(vec![ColumnDefinition::new(
-                1,
-                DataType::Integer,
-                "day".to_string(),
-            )]);
+            let table_page = TablePage::new(
+                page_manager.clone(),
+                vec![ColumnDefinition::new(
+                    1,
+                    DataType::Integer,
+                    "day".to_string(),
+                )],
+            );
             assert_eq!(1, table_page.record_size());
         }
 
         {
-            let table_page = TablePage::new(vec![
-                ColumnDefinition::new(1, DataType::Integer, "day".to_string()),
-                ColumnDefinition::new(2, DataType::Integer, "month".to_string()),
-            ]);
+            let table_page = TablePage::new(
+                page_manager,
+                vec![
+                    ColumnDefinition::new(1, DataType::Integer, "day".to_string()),
+                    ColumnDefinition::new(2, DataType::Integer, "month".to_string()),
+                ],
+            );
 
             assert_eq!(2, table_page.record_size());
         }
@@ -338,6 +364,7 @@ mod tests {
 
     #[test]
     fn test_initialize_and_load() {
+        let page_manager = Rc::new(RwLock::new(PageManager::new()));
         let page = Rc::new(RwLock::new(InternalPage::new()));
         let column_definitions = vec![
             ColumnDefinition::new(23, DataType::Integer, "day".to_string()),
@@ -345,21 +372,29 @@ mod tests {
         ];
 
         {
-            let mut table_page = TablePage::initialize(page.clone(), column_definitions.clone());
+            let mut table_page = TablePage::initialize(
+                page_manager.clone(),
+                page.clone(),
+                column_definitions.clone(),
+            );
             table_page.insert_record(vec![Value::Integer(13), Value::Integer(12)]);
         }
 
-        let table_page = TablePage::load(page.clone());
+        let table_page = TablePage::load(page_manager, page.clone());
         assert_eq!(&column_definitions, table_page.column_definitions());
         assert_eq!(1, table_page.record_count());
     }
 
     #[test]
     fn test_serialize_page_header() {
-        let table_page = TablePage::new(vec![
-            ColumnDefinition::new(23, DataType::Integer, "day".to_string()),
-            ColumnDefinition::new(11, DataType::Integer, "month".to_string()),
-        ]);
+        let page_manager = Rc::new(RwLock::new(PageManager::new()));
+        let table_page = TablePage::new(
+            page_manager,
+            vec![
+                ColumnDefinition::new(23, DataType::Integer, "day".to_string()),
+                ColumnDefinition::new(11, DataType::Integer, "month".to_string()),
+            ],
+        );
 
         let page_header = table_page.serialize_page_header();
 
