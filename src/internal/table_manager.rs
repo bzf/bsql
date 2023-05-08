@@ -139,19 +139,12 @@ impl TableManager {
             (page_id, record_slot)
         };
 
-        println!(
-            "TableManager.insert_record -> ({}, {})",
-            page_id, record_slot
-        );
-
         Some((page_id << 32) as u64 | record_slot as u64)
     }
 
     pub fn get_record(&self, record_id: u64) -> Option<RowResult> {
         let page_id = (record_id >> 32) & 0xFFFF_FFFF;
         let record_slot = record_id & 0xFFFF_FFFF;
-
-        println!("TableManager.get_record({}, {})", page_id, record_slot);
 
         let table_page = {
             let page_manager = self.page_manager.read().unwrap();
@@ -179,8 +172,6 @@ impl TableManager {
 
             let page_columns = table_page.column_definitions();
             let page_records = table_page.get_records();
-
-            println!("page_records for page_id={} -> {:?}", page_id, page_records);
 
             // For every column that we want to return (all might not exist), figure out how to
             // transform the order of the record we retrieved into what we expect.

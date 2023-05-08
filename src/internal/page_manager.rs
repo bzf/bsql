@@ -59,7 +59,6 @@ impl PageManager {
             return;
         }
 
-        println!("PageManager::commit()");
         let mut file = File::create(&self.filename).unwrap();
 
         for page in &self.pages {

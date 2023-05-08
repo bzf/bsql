@@ -65,39 +65,23 @@ impl TablePage {
 
         {
             let page = shared_page.read().unwrap();
-
             let column_definitions_byte_length =
                 usize::from_be_bytes(page.metadata[32..40].try_into().unwrap());
-            println!(
-                "column_definition_byte_length: {:?}",
-                column_definitions_byte_length
-            );
 
             let column_definitions_slice = &page.metadata[40..40 + column_definitions_byte_length];
-            println!("column_definition_slice: {:?}", column_definitions_slice);
 
             let mut start_cursor = 0;
 
             while start_cursor < column_definitions_slice.len() {
                 let column_definition_byte_length = column_definitions_slice[start_cursor] as usize;
-                println!(
-                    "column_definition_byte_length: {}",
-                    column_definition_byte_length
-                );
                 start_cursor += 1;
 
                 let column_definition_byte_slice = &column_definitions_slice
                     [start_cursor..start_cursor + column_definition_byte_length];
                 start_cursor += column_definition_byte_length;
 
-                println!(
-                    "column_definition_byte_slice: {:?}",
-                    column_definition_byte_slice
-                );
-
                 let column_definition =
                     ColumnDefinition::from_raw_bytes(column_definition_byte_slice).unwrap();
-                println!("column_definition: {:?}", column_definition);
 
                 column_definitions.push(column_definition);
             }
